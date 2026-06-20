@@ -32,6 +32,9 @@ module.exports = {
       },
       fontFamily: {
         orbitron: ["Orbitron"],
+        barlow: ["Barlow"],
+        "barlow-semibold": ["Barlow-SemiBold"],
+        "barlow-bold": ["Barlow-Bold"],
         inter: ["Inter"],
       },
     },

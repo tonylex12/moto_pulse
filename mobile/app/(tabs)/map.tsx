@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal, ScrollView, Dimensions, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
-import { Play, Square, Navigation, Bookmark, X, Save, Eye, Trash2 } from 'lucide-react-native';
+import { Play, Square, Navigation, Bookmark, X, Eye, Trash2 } from 'lucide-react-native';
 import { api } from '../../utils/api';
 import { useLocation, Coordinate } from '../../hooks/useLocation';
+import { useAlert } from '../../utils/AlertContext';
+import { useTheme } from '../../utils/ThemeContext';
 
 interface SavedRoute {
   id: string;
@@ -17,6 +19,9 @@ interface SavedRoute {
 }
 
 export default function RoutesMapScreen() {
+  const { showAlert } = useAlert();
+  const { colors } = useTheme();
+
   const {
     currentLocation,
     isRecording,
@@ -48,8 +53,8 @@ export default function RoutesMapScreen() {
 
   const fetchRoutes = async () => {
     try {
-      const res = await api.get('/routes');
-      // Format coordinates if returned as string from postgres json
+      // Changed to relative path without leading slash
+      const res = await api.get('routes');
       const formatted = res.data.map((r: any) => ({
         ...r,
         coordinates: typeof r.coordinates === 'string' ? JSON.parse(r.coordinates) : r.coordinates
@@ -84,14 +89,14 @@ export default function RoutesMapScreen() {
   const handleStartTracking = async () => {
     setSelectedRoute(null);
     await startRecording();
-    Alert.alert('Ruta Iniciada 🏁', 'MotoPulse está grabando tus coordenadas GPS.');
+    showAlert('Ruta Iniciada 🏁', 'MotoPulse está grabando tus coordenadas GPS.');
   };
 
   // Stop route capture
   const handleStopTracking = () => {
     stopRecording();
     if (recordedRoute.length < 2) {
-      Alert.alert('Ruta muy corta', 'No se grabaron suficientes coordenadas para guardar la ruta.');
+      showAlert('Ruta muy corta', 'No se grabaron suficientes coordenadas para guardar la ruta.');
       clearRecordedRoute();
       return;
     }
@@ -103,7 +108,7 @@ export default function RoutesMapScreen() {
   // Save route in db
   const handleSaveRoute = async () => {
     if (!routeName.trim()) {
-      Alert.alert('Error', 'Por favor ingresa un nombre para la ruta');
+      showAlert('Error', 'Por favor ingresa un nombre para la ruta');
       return;
     }
 
@@ -118,8 +123,9 @@ export default function RoutesMapScreen() {
         notes: routeNotes.trim() || undefined,
       };
 
-      await api.post('/routes', payload);
-      Alert.alert('¡Ruta Guardada! 🗺️', 'La ruta ha sido añadida a tus favoritos.');
+      // Changed to relative path without leading slash
+      await api.post('routes', payload);
+      showAlert('¡Ruta Guardada! 🗺️', 'La ruta ha sido añadida a tus favoritos.');
       
       // Reset forms & close
       setRouteName('');
@@ -133,7 +139,7 @@ export default function RoutesMapScreen() {
       fetchRoutes();
     } catch (e: any) {
       console.error(e);
-      Alert.alert('Error', e.response?.data?.error || 'No se pudo guardar la ruta');
+      showAlert('Error', e.response?.data?.error || 'No se pudo guardar la ruta');
     } finally {
       setSaving(false);
     }
@@ -145,7 +151,6 @@ export default function RoutesMapScreen() {
     setRoutesModalVisible(false);
 
     if (route.coordinates.length > 0 && mapRef.current) {
-      // Find bounding box to fit the route on screen
       const lats = route.coordinates.map(c => c.latitude);
       const lons = route.coordinates.map(c => c.longitude);
       const minLat = Math.min(...lats);
@@ -163,7 +168,7 @@ export default function RoutesMapScreen() {
   };
 
   const handleDeleteRoute = (routeId: string) => {
-    Alert.alert(
+    showAlert(
       'Eliminar Ruta',
       '¿Deseas eliminar esta ruta de tus favoritos?',
       [
@@ -173,14 +178,15 @@ export default function RoutesMapScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await api.delete(`/routes/${routeId}`);
+              // Changed to relative path without leading slash
+              await api.delete(`routes/${routeId}`);
               if (selectedRoute?.id === routeId) {
                 setSelectedRoute(null);
               }
               fetchRoutes();
             } catch (e) {
               console.error(e);
-              Alert.alert('Error', 'No se pudo eliminar la ruta');
+              showAlert('Error', 'No se pudo eliminar la ruta');
             }
           }
         }
@@ -189,18 +195,18 @@ export default function RoutesMapScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-carbon-matte">
+    <SafeAreaView className={`flex-1 ${colors.bg}`}>
       {/* Map view */}
       <View className="flex-1 relative">
         <MapView
           ref={mapRef}
           provider={PROVIDER_DEFAULT}
           className="w-full h-full"
-          customMapStyle={darkMapStyle}
+          customMapStyle={colors.isDark ? darkMapStyle : undefined}
           showsUserLocation={true}
           showsMyLocationButton={false}
           initialRegion={{
-            latitude: currentLocation?.latitude || 19.4326, // Default CDMX or user
+            latitude: currentLocation?.latitude || 19.4326,
             longitude: currentLocation?.longitude || -99.1332,
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
@@ -210,7 +216,7 @@ export default function RoutesMapScreen() {
           {isRecording && recordedRoute.length > 1 && (
             <Polyline
               coordinates={recordedRoute}
-              strokeColor="#00E5FF" // Speedometer Cyan
+              strokeColor={colors.bmwLightBlue}
               strokeWidth={5}
             />
           )}
@@ -220,18 +226,18 @@ export default function RoutesMapScreen() {
             <>
               <Polyline
                 coordinates={selectedRoute.coordinates}
-                strokeColor="#FF6B00" // KTM Orange
+                strokeColor={colors.bmwRed}
                 strokeWidth={5}
               />
               <Marker
                 coordinate={selectedRoute.coordinates[0]}
                 title="Inicio"
-                pinColor="#2CFF0A"
+                pinColor={colors.statusGreen}
               />
               <Marker
                 coordinate={selectedRoute.coordinates[selectedRoute.coordinates.length - 1]}
                 title="Fin"
-                pinColor="#FF2A3B"
+                pinColor={colors.bmwRed}
               />
             </>
           )}
@@ -240,24 +246,42 @@ export default function RoutesMapScreen() {
         {/* Dashboard floating HUD */}
         <View className="absolute top-4 left-4 right-4 flex-row justify-between items-center z-10 pointer-events-none">
           {isRecording ? (
-            <View className="bg-carbon-matte/90 border border-speedo-cyan rounded-xl p-3 flex-row items-center space-x-4 shadow-[0_0_12px_#00E5FF]">
-              <View className="w-2.5 h-2.5 rounded-full bg-ducati-red animate-pulse" />
+            <View 
+              className={`${colors.card}/95 border border-red-500 rounded-xl p-3 flex-row items-center space-x-4`}
+              style={{
+                shadowColor: colors.bmwRed,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.5,
+                shadowRadius: 10,
+                elevation: 5
+              }}
+            >
+              <View className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse" />
               <View>
-                <Text className="text-xxs text-neutral-400 uppercase tracking-widest font-bold">GRABANDO RUTA</Text>
-                <Text className="text-white font-orbitron font-bold text-sm">{totalDistance} km</Text>
+                <Text className={`text-xxs ${colors.textMuted} uppercase tracking-widest font-bold`}>GRABANDO RUTA</Text>
+                <Text className={`${colors.text} font-orbitron font-bold text-sm`}>{totalDistance} km</Text>
               </View>
             </View>
           ) : selectedRoute ? (
-            <View className="bg-carbon-matte/95 border border-tarmac-light rounded-xl p-3 flex-row items-center justify-between flex-1 pointer-events-auto">
+            <View 
+              className={`${colors.card} border ${colors.border} rounded-xl p-3 flex-row items-center justify-between flex-1 pointer-events-auto`}
+              style={{
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: colors.isDark ? 0.3 : 0.08,
+                shadowRadius: 6,
+                elevation: 4
+              }}
+            >
               <View className="flex-1">
-                <Text className="text-neutral-400 text-xxs uppercase tracking-widest font-bold">VIENDO RUTA</Text>
-                <Text className="text-white font-bold text-sm">{selectedRoute.name}</Text>
+                <Text className={`${colors.textMuted} text-xxs tracking-widest font-bold`}>VIENDO RUTA</Text>
+                <Text className={`${colors.text} font-bold text-sm`}>{selectedRoute.name}</Text>
                 {selectedRoute.distance && (
-                  <Text className="text-ktm-orange font-orbitron text-xs font-semibold">{selectedRoute.distance} km</Text>
+                  <Text className="font-orbitron text-xs font-semibold" style={{ color: colors.bmwBlue }}>{selectedRoute.distance} km</Text>
                 )}
               </View>
               <TouchableOpacity onPress={() => setSelectedRoute(null)} className="p-1">
-                <X size={18} color="#FF2A3B" />
+                <X size={18} color={colors.bmwRed} />
               </TouchableOpacity>
             </View>
           ) : (
@@ -270,34 +294,64 @@ export default function RoutesMapScreen() {
           {/* Favorites List button */}
           <TouchableOpacity
             onPress={() => setRoutesModalVisible(true)}
-            className="w-12 h-12 rounded-full bg-tarmac/95 border border-tarmac-light items-center justify-center shadow-lg"
+            className={`w-12 h-12 rounded-full ${colors.card} border ${colors.border} items-center justify-center`}
+            style={{
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: colors.isDark ? 0.3 : 0.08,
+              shadowRadius: 5,
+              elevation: 5
+            }}
           >
-            <Bookmark size={20} color="#00E5FF" />
+            <Bookmark size={20} color={colors.bmwBlue} />
           </TouchableOpacity>
 
           {/* Tracking button */}
           {isRecording ? (
             <TouchableOpacity
               onPress={handleStopTracking}
-              className="w-16 h-16 rounded-full bg-ducati-red items-center justify-center border-2 border-white shadow-[0_0_15px_rgba(255,42,59,0.5)]"
+              className="w-16 h-16 rounded-full items-center justify-center border-2 border-white"
+              style={{
+                backgroundColor: colors.bmwRed,
+                shadowColor: colors.bmwRed,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.5,
+                shadowRadius: 15,
+                elevation: 6
+              }}
             >
               <Square size={24} color="#F8F9FA" />
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
               onPress={handleStartTracking}
-              className="w-16 h-16 rounded-full bg-speedo-cyan items-center justify-center border-2 border-white shadow-[0_0_15px_rgba(0,229,255,0.5)]"
+              className="w-16 h-16 rounded-full items-center justify-center border-2 border-white"
+              style={{
+                backgroundColor: colors.bmwBlue,
+                shadowColor: colors.bmwBlue,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.5,
+                shadowRadius: 15,
+                elevation: 6
+              }}
             >
-              <Play size={24} color="#0B0D10" className="ml-1" />
+              <Play size={24} color="#FFFFFF" className="ml-1" />
             </TouchableOpacity>
           )}
 
           {/* GPS Center button */}
           <TouchableOpacity
             onPress={centerOnUser}
-            className="w-12 h-12 rounded-full bg-tarmac/95 border border-tarmac-light items-center justify-center shadow-lg"
+            className={`w-12 h-12 rounded-full ${colors.card} border ${colors.border} items-center justify-center`}
+            style={{
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: colors.isDark ? 0.3 : 0.08,
+              shadowRadius: 5,
+              elevation: 5
+            }}
           >
-            <Navigation size={20} color="#2CFF0A" />
+            <Navigation size={20} color={colors.statusGreen} />
           </TouchableOpacity>
         </View>
       </View>
@@ -308,93 +362,111 @@ export default function RoutesMapScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           className="flex-1"
         >
-          <View className="flex-1 bg-black/80 justify-end">
-            <View className="bg-tarmac border-t border-tarmac-light rounded-t-3xl shadow-2xl max-h-[85%]">
+          <View className="flex-1 bg-black/60 justify-end">
+            <View 
+              className={`${colors.card} border-t ${colors.border} rounded-t-3xl max-h-[85%]`}
+              style={{
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -10 },
+                shadowOpacity: colors.isDark ? 0.4 : 0.1,
+                shadowRadius: 15,
+                elevation: 8
+              }}
+            >
               <ScrollView 
                 contentContainerStyle={{ padding: 24, paddingBottom: 60 }}
                 className="w-full"
                 keyboardShouldPersistTaps="handled"
               >
                 <View className="flex-row justify-between items-center mb-6">
-                  <Text className="text-white font-orbitron text-base font-bold uppercase tracking-wider">
+                  <Text className={`${colors.text} font-orbitron text-base font-bold uppercase tracking-wider`}>
                     GUARDAR RUTA DE RIDER
                   </Text>
                   <TouchableOpacity onPress={() => setSaveModalVisible(false)} className="p-1">
-                    <X size={24} color="#F8F9FA" />
+                    <X size={24} color={colors.isDark ? '#F8F9FA' : '#4E5E72'} />
                   </TouchableOpacity>
                 </View>
 
-                <View className="mb-4 bg-carbon-dark border border-tarmac-light rounded-xl p-4 items-center">
-                  <Text className="text-neutral-400 text-xxs uppercase tracking-wider">Distancia total recorrida</Text>
-                  <Text className="text-speedo-cyan font-orbitron text-2xl font-bold tracking-widest mt-1">{totalDistance} km</Text>
+                <View className={`mb-4 ${colors.isDark ? 'bg-[#1A202C]' : 'bg-[#EBF0F5]'} border ${colors.border} rounded-xl p-4 items-center`}>
+                  <Text className={`${colors.textMuted} text-xxs uppercase tracking-wider`}>Distancia total recorrida</Text>
+                  <Text className="font-orbitron text-2xl font-bold tracking-widest mt-1" style={{ color: colors.bmwBlue }}>{totalDistance} km</Text>
                 </View>
 
                 {/* Name */}
                 <View className="mb-4">
-                  <Text className="text-neutral-400 text-xs uppercase mb-1.5 font-medium tracking-wide">
+                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
                     Nombre de la Ruta
                   </Text>
                   <TextInput
                     value={routeName}
                     placeholder="Ej. Curvas de la Sierra, Ruta del Fin de Semana"
-                    placeholderTextColor="#556070"
+                    placeholderTextColor={colors.isDark ? '#556070' : '#8E9FBC'}
                     onChangeText={setRouteName}
-                    className="w-full bg-carbon-dark text-white border border-tarmac-light rounded-xl px-4 py-3 text-sm focus:border-speedo-cyan"
+                    className={`w-full ${colors.isDark ? 'bg-[#1A202C] text-white' : 'bg-[#F4F5F7] text-[#002C5B]'} ${colors.isDark ? 'border ' + colors.border : ''} rounded-xl px-4 py-3 text-sm`}
                   />
                 </View>
 
                 {/* Start / End */}
-                <View className="mb-4 flex-row space-x-4">
-                  <View className="flex-1">
-                    <Text className="text-neutral-400 text-xs uppercase mb-1.5 font-medium tracking-wide">
+                <View className="mb-4 flex-row">
+                  <View className="flex-1 mr-2">
+                    <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
                       Punto de Inicio
                     </Text>
                     <TextInput
                       value={startPoint}
                       placeholder="Ej. Gasolinera km 10"
-                      placeholderTextColor="#556070"
+                      placeholderTextColor={colors.isDark ? '#556070' : '#8E9FBC'}
                       onChangeText={setStartPoint}
-                      className="w-full bg-carbon-dark text-white border border-tarmac-light rounded-xl px-4 py-3 text-sm focus:border-speedo-cyan"
+                      className={`w-full ${colors.isDark ? 'bg-[#1A202C] text-white' : 'bg-[#F4F5F7] text-[#002C5B]'} ${colors.isDark ? 'border ' + colors.border : ''} rounded-xl px-4 py-3 text-sm`}
                     />
                   </View>
 
-                  <View className="flex-1">
-                    <Text className="text-neutral-400 text-xs uppercase mb-1.5 font-medium tracking-wide">
+                  <View className="flex-1 ml-2">
+                    <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
                       Punto de Destino
                     </Text>
                     <TextInput
                       value={endPoint}
                       placeholder="Ej. Mirador San Mateo"
-                      placeholderTextColor="#556070"
+                      placeholderTextColor={colors.isDark ? '#556070' : '#8E9FBC'}
                       onChangeText={setEndPoint}
-                      className="w-full bg-carbon-dark text-white border border-tarmac-light rounded-xl px-4 py-3 text-sm focus:border-speedo-cyan"
+                      className={`w-full ${colors.isDark ? 'bg-[#1A202C] text-white' : 'bg-[#F4F5F7] text-[#002C5B]'} ${colors.isDark ? 'border ' + colors.border : ''} rounded-xl px-4 py-3 text-sm`}
                     />
                   </View>
                 </View>
 
                 {/* Notes */}
                 <View className="mb-6">
-                  <Text className="text-neutral-400 text-xs uppercase mb-1.5 font-medium tracking-wide">
+                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
                     Comentarios / Estado del Asfalto
                   </Text>
                   <TextInput
                     value={routeNotes}
                     placeholder="Ej. Buenas curvas, pocas imperfecciones, ideal para domingo."
-                    placeholderTextColor="#556070"
+                    placeholderTextColor={colors.isDark ? '#556070' : '#8E9FBC'}
                     onChangeText={setRouteNotes}
-                    className="w-full bg-carbon-dark text-white border border-tarmac-light rounded-xl px-4 py-3 text-sm focus:border-speedo-cyan"
+                    className={`w-full ${colors.isDark ? 'bg-[#1A202C] text-white' : 'bg-[#F4F5F7] text-[#002C5B]'} ${colors.isDark ? 'border ' + colors.border : ''} rounded-xl px-4 py-3 text-sm`}
                   />
                 </View>
 
                 <TouchableOpacity
                   onPress={handleSaveRoute}
                   disabled={saving}
-                  className="w-full bg-speedo-cyan rounded-xl py-3.5 items-center justify-center border border-speedo-cyan shadow-[0_0_12px_rgba(0,229,255,0.4)]"
+                  className="w-full rounded-xl py-3.5 items-center justify-center border"
+                  style={{
+                    backgroundColor: colors.bmwBlue,
+                    borderColor: colors.bmwBlue,
+                    shadowColor: colors.bmwBlue,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 4
+                  }}
                 >
                   {saving ? (
-                    <ActivityIndicator color="#0B0D10" />
+                    <ActivityIndicator color="#FFFFFF" />
                   ) : (
-                    <Text className="text-carbon-matte font-bold text-sm uppercase tracking-widest">
+                    <Text className="text-white font-bold text-sm uppercase tracking-widest">
                       GUARDAR EN HISTORIAL
                     </Text>
                   )}
@@ -407,57 +479,66 @@ export default function RoutesMapScreen() {
 
       {/* Favorite Routes Drawer Modal */}
       <Modal visible={routesModalVisible} animationType="slide" transparent={true}>
-        <View className="flex-1 bg-black/80 justify-end">
-          <View className="bg-tarmac border-t border-tarmac-light rounded-t-3xl p-6 shadow-2xl h-[70%]">
+        <View className="flex-1 bg-black/60 justify-end">
+          <View 
+            className={`${colors.card} border-t ${colors.border} rounded-t-3xl p-6 h-[70%]`}
+            style={{
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -10 },
+              shadowOpacity: colors.isDark ? 0.4 : 0.1,
+              shadowRadius: 15,
+              elevation: 8
+            }}
+          >
             <View className="flex-row justify-between items-center mb-6">
-              <Text className="text-white font-orbitron text-base font-bold uppercase tracking-wider">
+              <Text className={`${colors.text} font-orbitron text-base font-bold uppercase tracking-wider`}>
                 MIS RUTAS FAVORITAS
               </Text>
               <TouchableOpacity onPress={() => setRoutesModalVisible(false)} className="p-1">
-                <X size={24} color="#F8F9FA" />
+                <X size={24} color={colors.isDark ? '#F8F9FA' : '#4E5E72'} />
               </TouchableOpacity>
             </View>
 
             {loading ? (
-              <ActivityIndicator size="large" color="#00E5FF" className="my-auto" />
+              <ActivityIndicator size="large" color={colors.bmwBlue} className="my-auto" />
             ) : (
               <ScrollView className="flex-1">
                 {savedRoutes.length > 0 ? (
                   savedRoutes.map((route) => (
                     <View
                       key={route.id}
-                      className="bg-carbon-dark border border-tarmac-light rounded-xl p-4 mb-3"
+                      className={`${colors.isDark ? 'bg-[#1A202C]' : 'bg-[#EBF0F5]'} border ${colors.border} rounded-xl p-4 mb-3`}
                     >
                       <View className="flex-row justify-between items-start">
                         <View className="flex-1">
-                          <Text className="text-white font-bold text-base">{route.name}</Text>
+                          <Text className={`${colors.text} font-bold text-base`}>{route.name}</Text>
                           {route.distance && (
-                            <Text className="text-speedo-cyan font-orbitron text-xs font-semibold mt-0.5">
+                            <Text className="font-orbitron text-xs font-semibold mt-0.5" style={{ color: colors.bmwBlue }}>
                               {route.distance} km
                             </Text>
                           )}
                           {(route.startPoint || route.endPoint) && (
-                            <Text className="text-neutral-400 text-xs mt-1.5">
+                            <Text className={`${colors.textSec} text-xs mt-1.5`}>
                               {route.startPoint || 'Inicio'} → {route.endPoint || 'Fin'}
                             </Text>
                           )}
                           {route.notes && (
-                            <Text className="text-neutral-400 text-xs italic mt-2">"{route.notes}"</Text>
+                            <Text className={`${colors.textMuted} text-xs italic mt-2`}>"{route.notes}"</Text>
                           )}
                         </View>
                         
                         <View className="flex-row space-x-2 ml-4">
                           <TouchableOpacity
                             onPress={() => handleViewRoute(route)}
-                            className="bg-tarmac border border-tarmac-light p-2 rounded-lg"
+                            className={`${colors.card} border ${colors.border} p-2 rounded-lg`}
                           >
-                            <Eye size={16} color="#2CFF0A" />
+                            <Eye size={16} color={colors.statusGreen} />
                           </TouchableOpacity>
                           <TouchableOpacity
                             onPress={() => handleDeleteRoute(route.id)}
-                            className="bg-tarmac border border-tarmac-light p-2 rounded-lg"
+                            className={`${colors.card} border ${colors.border} p-2 rounded-lg`}
                           >
-                            <Trash2 size={16} color="#FF2A3B" />
+                            <Trash2 size={16} color={colors.bmwRed} />
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -465,9 +546,9 @@ export default function RoutesMapScreen() {
                   ))
                 ) : (
                   <View className="items-center py-20">
-                    <Bookmark size={36} color="#8F9CAE" />
-                    <Text className="text-white font-medium mt-2">No has guardado ninguna ruta</Text>
-                    <Text className="text-neutral-400 text-center text-xs mt-1">Graba un recorrido en el mapa y aparecerá aquí.</Text>
+                    <Bookmark size={36} color={colors.isDark ? '#8F9CAE' : '#8E9FBC'} />
+                    <Text className={`${colors.text} font-medium mt-2`}>No has guardado ninguna ruta</Text>
+                    <Text className={`${colors.textMuted} text-center text-xs mt-1`}>Graba un recorrido en el mapa y aparecerá aquí.</Text>
                   </View>
                 )}
               </ScrollView>

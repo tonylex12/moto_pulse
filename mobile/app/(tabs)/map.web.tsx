@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bookmark, Navigation, Phone, Eye, Trash2, Globe } from 'lucide-react-native';
 import { api } from '../../utils/api';
+import { useTheme } from '../../utils/ThemeContext';
 
 interface SavedRoute {
   id: string;
@@ -14,6 +15,7 @@ interface SavedRoute {
 }
 
 export default function RoutesMapWebScreen() {
+  const { colors, theme } = useTheme();
   const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -45,32 +47,38 @@ export default function RoutesMapWebScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-carbon-matte">
+    <SafeAreaView className={`flex-1 ${colors.bg}`}>
       {/* Header */}
-      <View className="flex-row justify-between items-center px-6 py-4 border-b border-tarmac">
-        <Text className="text-white font-orbitron text-lg font-bold tracking-wider uppercase">
+      <View
+        className="flex-row justify-between items-center px-6 py-4"
+        style={{
+          borderBottomWidth: 1,
+          borderBottomColor: theme === "light" ? "#D8E0EB" : "#242D3D",
+        }}
+      >
+        <Text className={`${colors.text} font-orbitron text-lg font-bold tracking-wider uppercase`}>
           RUTAS Y GPS (WEB CONSOLE)
         </Text>
       </View>
 
       <View className="flex-1 flex-row md:flex-row flex-col">
         {/* Left Side: Web Map Mockup / Info */}
-        <View className="flex-1 bg-carbon-dark p-6 justify-center items-center border-r border-tarmac">
-          <View className="max-w-md items-center text-center p-6 bg-tarmac border border-tarmac-light rounded-2xl shadow-xl">
-            <View className="w-12 h-12 rounded-full bg-speedo-cyan/20 items-center justify-center mb-4">
-              <Navigation size={24} color="#00E5FF" />
+        <View className={`flex-1 ${colors.isDark ? 'bg-[#0A0D12]' : 'bg-[#F4F5F7]'} p-6 justify-center items-center border-r ${colors.border}`}>
+          <View className={`max-w-md items-center text-center p-6 ${colors.card} border ${colors.border} rounded-2xl shadow-xl`}>
+            <View className={`w-12 h-12 rounded-full ${colors.isDark ? 'bg-[#00A3E0]/20' : 'bg-[#1C69D4]/20'} items-center justify-center mb-4`}>
+              <Navigation size={24} color={colors.bmwBlue} />
             </View>
-            <Text className="text-white font-orbitron text-lg font-bold uppercase mb-2">
+            <Text className={`${colors.text} font-orbitron text-lg font-bold uppercase mb-2`}>
               Rastreo GPS en Celular
             </Text>
-            <Text className="text-neutral-400 text-xs leading-relaxed mb-6">
+            <Text className={`${colors.textMuted} text-xs leading-relaxed mb-6`}>
               El rastreo GPS en tiempo real y la grabación de recorridos requieren sensores nativos de alta precisión. 
               Por favor abre **MotoPulse** en tu dispositivo físico Android o iOS (mediante Expo Go) para registrar una nueva ruta.
             </Text>
 
-            <View className="flex-row items-center bg-carbon-matte border border-tarmac-light rounded-xl p-3 w-full space-x-3">
-              <Phone size={18} color="#FF6B00" />
-              <Text className="text-neutral-300 text-xxs font-semibold uppercase tracking-wider">
+            <View className={`flex-row items-center ${colors.isDark ? 'bg-[#1A202C]' : 'bg-[#EBF0F5]'} border ${colors.border} rounded-xl p-3 w-full space-x-3`}>
+              <Phone size={18} color={colors.bmwBlue} />
+              <Text className={`${colors.textSec} text-xxs font-semibold uppercase tracking-wider`}>
                 Disponible en iOS y Android
               </Text>
             </View>
@@ -78,62 +86,62 @@ export default function RoutesMapWebScreen() {
         </View>
 
         {/* Right Side: Saved Routes List */}
-        <View className="w-full md:w-[450px] p-6 bg-carbon-matte">
-          <Text className="text-neutral-400 font-bold text-xs uppercase tracking-widest mb-4 flex-row items-center">
-            <Bookmark size={14} color="#8F9CAE" className="mr-1.5" />
+        <View className={`w-full md:w-[450px] p-6 ${colors.bg}`}>
+          <Text className={`${colors.textSec} font-bold text-xs uppercase tracking-widest mb-4 flex-row items-center`}>
+            <Bookmark size={14} color={colors.isDark ? '#8F9CAE' : '#8E9FBC'} className="mr-1.5" />
             MIS RUTAS FAVORITAS
           </Text>
 
           {loading ? (
-            <ActivityIndicator size="large" color="#00E5FF" className="my-auto" />
+            <ActivityIndicator size="large" color={colors.bmwBlue} className="my-auto" />
           ) : (
             <ScrollView className="flex-grow">
               {savedRoutes.length > 0 ? (
                 savedRoutes.map((route) => (
                   <View
                     key={route.id}
-                    className="bg-tarmac border border-tarmac-light rounded-xl p-4 mb-3"
+                    className={`${colors.card} border ${colors.border} rounded-xl p-4 mb-3`}
                   >
                     <View className="flex-row justify-between items-start">
                       <View className="flex-1">
-                        <Text className="text-white font-bold text-base">{route.name}</Text>
+                        <Text className={`${colors.text} font-bold text-base`}>{route.name}</Text>
                         {route.distance && (
-                          <Text className="text-speedo-cyan font-orbitron text-xs font-semibold mt-0.5">
+                          <Text className="font-orbitron text-xs font-semibold mt-0.5" style={{ color: colors.bmwBlue }}>
                             {route.distance} km
                           </Text>
                         )}
                         {(route.startPoint || route.endPoint) && (
-                          <Text className="text-neutral-400 text-xs mt-1.5">
+                          <Text className={`${colors.textSec} text-xs mt-1.5`}>
                             {route.startPoint || 'Inicio'} → {route.endPoint || 'Fin'}
                           </Text>
                         )}
                         {route.notes && (
-                          <Text className="text-neutral-400 text-xs italic mt-2">"{route.notes}"</Text>
+                          <Text className={`${colors.textMuted} text-xs italic mt-2`}>"{route.notes}"</Text>
                         )}
                       </View>
                       
                       <View className="flex-row space-x-2 ml-4">
                         <TouchableOpacity
                           onPress={() => alert('Para visualizar el recorrido en el mapa, abre la aplicación en tu celular.')}
-                          className="bg-carbon-matte border border-tarmac-light p-2 rounded-lg"
+                          className={`${colors.isDark ? 'bg-[#1A202C]' : 'bg-[#EBF0F5]'} border ${colors.border} p-2 rounded-lg`}
                         >
-                          <Eye size={16} color="#00E5FF" />
+                          <Eye size={16} color={colors.bmwBlue} />
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => handleDeleteRoute(route.id)}
-                          className="bg-carbon-matte border border-tarmac-light p-2 rounded-lg"
+                          className={`${colors.isDark ? 'bg-[#1A202C]' : 'bg-[#EBF0F5]'} border ${colors.border} p-2 rounded-lg`}
                         >
-                          <Trash2 size={16} color="#FF2A3B" />
+                          <Trash2 size={16} color={colors.bmwRed} />
                         </TouchableOpacity>
                       </View>
                     </View>
                   </View>
                 ))
               ) : (
-                <View className="items-center py-20 bg-tarmac/40 rounded-xl border border-tarmac-light border-dashed">
-                  <Globe size={32} color="#8F9CAE" />
-                  <Text className="text-white font-medium mt-2 text-center text-sm">No has guardado ninguna ruta</Text>
-                  <Text className="text-neutral-400 text-center text-xs mt-1 px-4">
+                <View className={`items-center py-20 ${colors.card} rounded-xl border ${colors.border} border-dashed`}>
+                  <Globe size={32} color={colors.isDark ? '#8F9CAE' : '#8E9FBC'} />
+                  <Text className={`${colors.text} font-medium mt-2 text-center text-sm`}>No has guardado ninguna ruta</Text>
+                  <Text className={`${colors.textMuted} text-center text-xs mt-1 px-4`}>
                     Graba tus recorridos en carretera desde tu celular para consultarlos en esta lista.
                   </Text>
                 </View>

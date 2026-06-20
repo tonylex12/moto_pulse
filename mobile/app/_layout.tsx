@@ -5,16 +5,79 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { 
   useFonts, 
   Orbitron_400Regular, 
+  Orbitron_600SemiBold,
   Orbitron_700Bold 
 } from '@expo-google-fonts/orbitron';
+import {
+  Barlow_400Regular,
+  Barlow_600SemiBold,
+  Barlow_700Bold
+} from '@expo-google-fonts/barlow';
 import { 
   Inter_400Regular, 
   Inter_600SemiBold, 
   Inter_700Bold 
 } from '@expo-google-fonts/inter';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Text, TextInput, StyleSheet } from 'react-native';
+
+const patchTextComponent = (Component: any, defaultFont: string) => {
+  if (!Component) return;
+
+  const patchStyle = (style: any) => {
+    const flatStyle = StyleSheet.flatten(style);
+    
+    // Check if custom font is already defined
+    const hasCustomFont = flatStyle?.fontFamily && 
+      flatStyle.fontFamily !== 'System' && 
+      flatStyle.fontFamily !== 'Orbitron' &&
+      flatStyle.fontFamily !== 'Orbitron-SemiBold' &&
+      flatStyle.fontFamily !== 'Orbitron-Bold';
+
+    if (hasCustomFont) {
+      return style;
+    }
+
+    const weight = flatStyle?.fontWeight;
+    let targetFont = defaultFont;
+    if (weight === 'bold' || weight === '700' || weight === '800' || weight === '900') {
+      targetFont = 'Orbitron-Bold';
+    } else if (weight === '500' || weight === '600') {
+      targetFont = 'Orbitron-SemiBold';
+    }
+
+    return [{ fontFamily: targetFont }, style];
+  };
+
+  // If component has a direct render function (e.g. forwardRef)
+  if (Component.render) {
+    const oldRender = Component.render;
+    Component.render = function (...args: any[]) {
+      const origin = oldRender.apply(this, args);
+      if (!origin) return origin;
+      return React.cloneElement(origin, {
+        style: patchStyle(origin.props.style),
+      });
+    };
+  } else if (Component.prototype && Component.prototype.render) {
+    // If it is a class component
+    const oldPrototypeRender = Component.prototype.render;
+    Component.prototype.render = function (...args: any[]) {
+      const origin = oldPrototypeRender.apply(this, args);
+      if (!origin) return origin;
+      return React.cloneElement(origin, {
+        style: patchStyle(origin.props.style),
+      });
+    };
+  }
+};
+
+patchTextComponent(Text, 'Orbitron');
+patchTextComponent(TextInput, 'Orbitron');
+
 import { tokenCache } from '../utils/tokenCache';
-import { setAuthToken, api } from '../utils/api';
+import { setAuthToken, setTokenResolver, api } from '../utils/api';
+import { AlertProvider } from '../utils/AlertContext';
+import { ThemeProvider } from '../utils/ThemeContext';
 import '../global.css';
 
 // Retrieve the Clerk publishable key from environment variables
@@ -29,10 +92,23 @@ function InitialLayout() {
 
   const [authSynced, setAuthSynced] = useState(false);
 
+  useEffect(() => {
+    if (isLoaded) {
+      setTokenResolver(getToken);
+    }
+    return () => {
+      setTokenResolver(null);
+    };
+  }, [isLoaded, getToken]);
+
   // Load custom fonts for dashboard
   const [fontsLoaded] = useFonts({
     'Orbitron': Orbitron_400Regular,
+    'Orbitron-SemiBold': Orbitron_600SemiBold,
     'Orbitron-Bold': Orbitron_700Bold,
+    'Barlow': Barlow_400Regular,
+    'Barlow-SemiBold': Barlow_600SemiBold,
+    'Barlow-Bold': Barlow_700Bold,
     'Inter': Inter_400Regular,
     'Inter-SemiBold': Inter_600SemiBold,
     'Inter-Bold': Inter_700Bold,
@@ -88,8 +164,8 @@ function InitialLayout() {
 
   if (!isLoaded || !fontsLoaded || (isSignedIn && !authSynced)) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#0B0D10', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#00E5FF" />
+      <View style={{ flex: 1, backgroundColor: '#F4F5F7', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#1C69D4" />
       </View>
     );
   }
@@ -107,7 +183,11 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ClerkProvider publishableKey={EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
         <ClerkLoaded>
-          <InitialLayout />
+          <ThemeProvider>
+            <AlertProvider>
+              <InitialLayout />
+            </AlertProvider>
+          </ThemeProvider>
         </ClerkLoaded>
       </ClerkProvider>
     </SafeAreaProvider>

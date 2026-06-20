@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal, RefreshControl, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Modal, RefreshControl, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, Bell, Calendar, Activity, Check, Trash2, X, ChevronDown, CheckCircle2 } from 'lucide-react-native';
 import { api } from '../../utils/api';
+import { useAlert } from '../../utils/AlertContext';
+import { useTheme } from '../../utils/ThemeContext';
 
 interface Vehicle {
   id: string;
   brand: string;
   model: string;
   currentMileage: number;
+  isActive: boolean;
 }
 
 interface AlertData {
@@ -28,6 +31,10 @@ const ALERT_TYPES = [
 ];
 
 export default function AlertsScreen() {
+  const { showAlert } = useAlert();
+  const { theme, colors } = useTheme();
+  const activeBmwColor = theme === 'light' ? colors.bmwBlue : colors.bmwLightBlue;
+
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [alerts, setAlerts] = useState<AlertData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,13 +52,16 @@ export default function AlertsScreen() {
 
   const loadData = async () => {
     try {
-      const response = await api.get('/vehicles');
-      if (response.data && response.data.length > 0) {
-        const activeVehicle = response.data[0];
+      // Changed to relative path without leading slash
+      const response = await api.get('vehicles');
+      const list = response.data || [];
+      if (list.length > 0) {
+        // Find the active vehicle dynamically
+        const activeVehicle = list.find((v: any) => v.isActive) || list[0];
         setVehicle(activeVehicle);
 
-        // Fetch alerts
-        const alertsResponse = await api.get(`/alerts/vehicle/${activeVehicle.id}`);
+        // Fetch alerts (relative path)
+        const alertsResponse = await api.get(`alerts/vehicle/${activeVehicle.id}`);
         setAlerts(alertsResponse.data);
       } else {
         setVehicle(null);
@@ -77,7 +87,7 @@ export default function AlertsScreen() {
   const handleCreateAlert = async () => {
     if (!vehicle) return;
     if (!title.trim() || !triggerValue) {
-      Alert.alert('Error', 'Por favor completa todos los campos del recordatorio');
+      showAlert('Error', 'Por favor completa todos los campos del recordatorio');
       return;
     }
 
@@ -85,16 +95,16 @@ export default function AlertsScreen() {
     if (triggerType === 'MILEAGE') {
       const mileageVal = parseInt(triggerValue);
       if (isNaN(mileageVal) || mileageVal <= 0) {
-        Alert.alert('Error', 'El odómetro objetivo debe ser un número positivo');
+        showAlert('Error', 'El odómetro objetivo debe ser un número positivo');
         return;
       }
       if (mileageVal <= vehicle.currentMileage) {
-        Alert.alert('Advertencia', 'El kilometraje objetivo ya se ha superado en tu odómetro actual');
+        showAlert('Advertencia', 'El kilometraje objetivo ya se ha superado en tu odómetro actual');
       }
     } else {
       const dateVal = Date.parse(triggerValue);
       if (isNaN(dateVal)) {
-        Alert.alert('Error', 'Ingresa una fecha de expiración válida (Formato YYYY-MM-DD)');
+        showAlert('Error', 'Ingresa una fecha de expiración válida (Formato YYYY-MM-DD)');
         return;
       }
     }
@@ -109,8 +119,9 @@ export default function AlertsScreen() {
         triggerValue,
       };
 
-      await api.post('/alerts', payload);
-      Alert.alert('Alerta Creada', 'El recordatorio de mantenimiento se ha configurado.');
+      // Changed to relative paths without leading slash
+      await api.post('alerts', payload);
+      showAlert('Alerta Creada', 'El recordatorio de mantenimiento se ha configurado.');
       
       // Reset form & close
       setTitle('');
@@ -121,14 +132,14 @@ export default function AlertsScreen() {
       loadData();
     } catch (e: any) {
       console.error(e);
-      Alert.alert('Error', e.response?.data?.error || 'No se pudo configurar la alerta');
+      showAlert('Error', e.response?.data?.error || 'No se pudo configurar la alerta');
     } finally {
       setSaving(false);
     }
   };
 
   const handleResolveAlert = async (alertId: string) => {
-    Alert.alert(
+    showAlert(
       'Completar Mantenimiento',
       '¿Deseas marcar esta alerta como realizada/completada?',
       [
@@ -137,11 +148,12 @@ export default function AlertsScreen() {
           text: 'Resolver',
           onPress: async () => {
             try {
-              await api.put(`/alerts/${alertId}`, { isCompleted: true });
+              // Changed to relative path
+              await api.put(`alerts/${alertId}`, { isCompleted: true });
               loadData();
             } catch (e) {
               console.error(e);
-              Alert.alert('Error', 'No se pudo actualizar la alerta');
+              showAlert('Error', 'No se pudo actualizar la alerta');
             }
           }
         }
@@ -150,7 +162,7 @@ export default function AlertsScreen() {
   };
 
   const handleDeleteAlert = (alertId: string) => {
-    Alert.alert(
+    showAlert(
       'Borrar Recordatorio',
       '¿Estás seguro de que quieres eliminar esta alerta?',
       [
@@ -160,11 +172,12 @@ export default function AlertsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await api.delete(`/alerts/${alertId}`);
+              // Changed to relative path
+              await api.delete(`alerts/${alertId}`);
               loadData();
             } catch (e) {
               console.error(e);
-              Alert.alert('Error', 'No se pudo eliminar la alerta');
+              showAlert('Error', 'No se pudo eliminar la alerta');
             }
           }
         }
@@ -174,27 +187,33 @@ export default function AlertsScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#0B0D10', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#00E5FF" />
+      <View style={{ flex: 1, backgroundColor: colors.isDark ? '#0A0D12' : '#F4F5F7', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={activeBmwColor} />
       </View>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-carbon-matte">
+    <SafeAreaView className={`flex-1 ${colors.bg}`}>
       {/* Header */}
-      <View className="flex-row justify-between items-center px-6 py-4 border-b border-tarmac">
-        <Text className="text-white font-orbitron text-lg font-bold tracking-wider uppercase">
-          ALERTAS Y MANTENIMIENTO
+      <View
+        className="flex-row justify-between items-center px-6 py-4"
+        style={{
+          borderBottomWidth: 1,
+          borderBottomColor: theme === "light" ? "#D8E0EB" : "#242D3D",
+        }}
+      >
+        <Text className={`font-orbitron text-lg font-bold tracking-wider uppercase ${colors.text}`}>
+          ALERTAS DE MANTENIMIENTO
         </Text>
         {vehicle && (
           <TouchableOpacity
             onPress={() => setModalVisible(true)}
-            className="flex-row items-center bg-speedo-cyan rounded-lg px-3 py-1.5 border border-speedo-cyan"
+            className="flex-row items-center bg-[#1C69D4] rounded-lg px-3 py-1.5 border border-[#1C69D4]"
           >
-            <Plus size={16} color="#0B0D10" />
-            <Text className="text-carbon-matte font-bold text-xs uppercase tracking-wider ml-1">
-              NUEVO
+            <Plus size={16} color="#FFFFFF" />
+            <Text className="text-white font-bold text-xs uppercase tracking-wider ml-1">
+              ALERTAS
             </Text>
           </TouchableOpacity>
         )}
@@ -202,11 +221,11 @@ export default function AlertsScreen() {
 
       {!vehicle ? (
         <View className="flex-grow justify-center items-center p-6">
-          <Bell size={48} color="#FF6B00" />
-          <Text className="text-white text-center font-orbitron text-base font-bold mt-4 uppercase">
+          <Bell size={48} color={colors.bmwRed} />
+          <Text className={`text-center font-orbitron text-base font-bold mt-4 uppercase ${colors.text}`}>
             REGISTRA TU MOTO PRIMERO
           </Text>
-          <Text className="text-neutral-400 text-center text-xs mt-1">
+          <Text className={`${colors.textSec} text-center text-xs mt-1`}>
             Debes registrar una moto en el Panel principal antes de configurar alertas de mantenimiento.
           </Text>
         </View>
@@ -216,32 +235,32 @@ export default function AlertsScreen() {
           className="flex-grow p-6"
         >
           {/* Active Alerts Timeline */}
-          <Text className="text-neutral-400 font-bold text-xs uppercase tracking-widest mb-4">
+          <Text className={`${colors.textSec} font-bold text-xs uppercase tracking-widest mb-4`}>
             ALERTAS PROGRAMADAS
           </Text>
 
           {alerts.length > 0 ? (
             alerts.map((alert) => {
               // Calculate status
-              let statusBorder = 'border-tarmac-light';
-              let badgeColor = 'bg-neutral-800 text-neutral-400';
+              let statusBorder = `border-${theme === 'light' ? 'neutral-200' : 'tarmac-light'}`;
+              let badgeColor = theme === 'light' ? 'bg-neutral-200 text-neutral-600' : 'bg-neutral-800 text-neutral-400';
               let triggerDesc = '';
 
               if (alert.isCompleted) {
-                statusBorder = 'border-neutral-800 opacity-60';
-                badgeColor = 'bg-neutral-900 text-neutral-500';
+                statusBorder = `border-${theme === 'light' ? 'neutral-300' : 'neutral-800'} opacity-60`;
+                badgeColor = theme === 'light' ? 'bg-neutral-100 text-neutral-400' : 'bg-neutral-900 text-neutral-500';
               } else if (alert.triggerType === 'MILEAGE') {
                 const targetOdo = parseInt(alert.triggerValue);
                 const remaining = targetOdo - vehicle.currentMileage;
                 if (remaining <= 0) {
-                  statusBorder = 'border-l-4 border-l-ducati-red';
-                  badgeColor = 'bg-ducati-red/20 text-ducati-red';
+                  statusBorder = 'border-l-4 border-l-[#E30613]';
+                  badgeColor = 'bg-[#E30613]/15 text-[#E30613]';
                 } else if (remaining <= 500) {
-                  statusBorder = 'border-l-4 border-l-ktm-orange';
-                  badgeColor = 'bg-ktm-orange/20 text-ktm-orange';
+                  statusBorder = 'border-l-4 border-l-[#FF9E00]';
+                  badgeColor = 'bg-[#FF9E00]/15 text-[#FF9E00]';
                 } else {
-                  statusBorder = 'border-l-4 border-l-kawasaki-green';
-                  badgeColor = 'bg-kawasaki-green/20 text-kawasaki-green';
+                  statusBorder = `border-l-4 ${theme === 'light' ? 'border-l-[#008A22]' : 'border-l-[#2CFF0A]'}`;
+                  badgeColor = theme === 'light' ? 'bg-[#008A22]/10 text-[#008A22]' : 'bg-[#2CFF0A]/20 text-[#2CFF0A]';
                 }
                 triggerDesc = `A los ${targetOdo.toLocaleString()} km`;
               } else {
@@ -251,14 +270,14 @@ export default function AlertsScreen() {
                 const daysLeft = Math.ceil((targetTime - today) / (1000 * 60 * 60 * 24));
                 
                 if (daysLeft <= 0) {
-                  statusBorder = 'border-l-4 border-l-ducati-red';
-                  badgeColor = 'bg-ducati-red/20 text-ducati-red';
+                  statusBorder = 'border-l-4 border-l-[#E30613]';
+                  badgeColor = 'bg-[#E30613]/15 text-[#E30613]';
                 } else if (daysLeft <= 7) {
-                  statusBorder = 'border-l-4 border-l-ktm-orange';
-                  badgeColor = 'bg-ktm-orange/20 text-ktm-orange';
+                  statusBorder = 'border-l-4 border-l-[#FF9E00]';
+                  badgeColor = 'bg-[#FF9E00]/15 text-[#FF9E00]';
                 } else {
-                  statusBorder = 'border-l-4 border-l-speedo-cyan';
-                  badgeColor = 'bg-speedo-cyan/20 text-speedo-cyan';
+                  statusBorder = `border-l-4 ${theme === 'light' ? 'border-l-[#1C69D4]' : 'border-l-[#00A3E0]'}`;
+                  badgeColor = theme === 'light' ? 'bg-[#1C69D4]/10 text-[#1C69D4]' : 'bg-[#00A3E0]/20 text-[#00A3E0]';
                 }
                 
                 triggerDesc = `Expiración: ${new Date(alert.triggerValue).toLocaleDateString('es-ES')}`;
@@ -267,26 +286,26 @@ export default function AlertsScreen() {
               return (
                 <View
                   key={alert.id}
-                  className={`bg-tarmac border border-tarmac-light rounded-xl p-4 mb-3 flex-row justify-between items-center ${statusBorder}`}
+                  className={`${colors.card} border ${colors.border} rounded-xl p-4 mb-3 flex-row justify-between items-center ${statusBorder}`}
                 >
                   <View className="flex-1">
                     <View className="flex-row items-center mb-1 space-x-2">
-                      <Text className="text-white font-semibold text-sm uppercase tracking-wide">
+                      <Text className={`${colors.text} font-semibold text-sm uppercase tracking-wide`}>
                         {alert.title}
                       </Text>
                       {alert.isCompleted && (
-                        <View className="bg-neutral-900 border border-neutral-800 rounded px-1.5 py-0.5">
+                        <View className={`border ${theme === 'light' ? 'bg-neutral-100 border-neutral-200' : 'bg-neutral-900 border-neutral-800'} rounded px-1.5 py-0.5`}>
                           <Text className="text-[9px] text-neutral-500 font-bold uppercase">Hecho</Text>
                         </View>
                       )}
                     </View>
                     <View className="flex-row items-center space-x-3 mt-1">
                       {alert.triggerType === 'MILEAGE' ? (
-                        <Activity size={12} color="#8F9CAE" />
+                        <Activity size={12} color={theme === 'light' ? '#4E5E72' : '#8F9CAE'} />
                       ) : (
-                        <Calendar size={12} color="#8F9CAE" />
+                        <Calendar size={12} color={theme === 'light' ? '#4E5E72' : '#8F9CAE'} />
                       )}
-                      <Text className="text-neutral-400 text-xs font-medium">{triggerDesc}</Text>
+                      <Text className={`${colors.textSec} text-xs font-medium`}>{triggerDesc}</Text>
                     </View>
                   </View>
 
@@ -295,30 +314,31 @@ export default function AlertsScreen() {
                     {!alert.isCompleted && (
                       <TouchableOpacity
                         onPress={() => handleResolveAlert(alert.id)}
-                        className="bg-carbon-matte border border-tarmac-light p-2 rounded-lg"
+                        className={`${colors.subCard} border ${colors.border} p-2 rounded-lg`}
                       >
-                        <Check size={16} color="#2CFF0A" />
+                        <Check size={16} color={colors.statusGreen} />
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity
                       onPress={() => handleDeleteAlert(alert.id)}
-                      className="bg-carbon-matte border border-tarmac-light p-2 rounded-lg"
+                      className={`${colors.subCard} border ${colors.border} p-2 rounded-lg`}
                     >
-                      <Trash2 size={16} color="#FF2A3B" />
+                      <Trash2 size={16} color={colors.bmwRed} />
                     </TouchableOpacity>
                   </View>
                 </View>
               );
             })
           ) : (
-            <View className="bg-tarmac border border-tarmac-light rounded-xl p-6 items-center">
-              <CheckCircle2 size={32} color="#8F9CAE" />
-              <Text className="text-white text-center mt-2 font-medium">No tienes alertas creadas</Text>
-              <Text className="text-neutral-400 text-center text-xs mt-1">Crea recordatorios de aceite, frenos o seguro con el botón superior.</Text>
+            <View className={`${colors.card} border ${colors.border} rounded-xl p-6 items-center`}>
+              <CheckCircle2 size={32} color={colors.bmwBlue} />
+              <Text className={`${colors.text} text-center mt-2 font-medium`}>Sin alertas programadas</Text>
+              <Text className={`${colors.textSec} text-center text-xs mt-1`}>Presiona el botón superior para agregar un recordatorio.</Text>
             </View>
           )}
         </ScrollView>
       )}
+
 
       {/* Add Alert Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
@@ -326,145 +346,172 @@ export default function AlertsScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           className="flex-1"
         >
-          <View className="flex-1 bg-black/80 justify-end">
-            <View className="bg-tarmac border-t border-tarmac-light rounded-t-3xl shadow-2xl max-h-[85%]">
+          <View className="flex-1 bg-black/60 justify-end">
+            <View 
+              className={`${colors.card} border-t ${colors.border} rounded-t-3xl max-h-[85%]`}
+              style={{
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -10 },
+                shadowOpacity: theme === 'light' ? 0.05 : 0.4,
+                shadowRadius: 15,
+                elevation: 8
+              }}
+            >
               <ScrollView 
                 contentContainerStyle={{ padding: 24, paddingBottom: 60 }}
                 className="w-full"
                 keyboardShouldPersistTaps="handled"
               >
-            {/* Header */}
-            <View className="flex-row justify-between items-center mb-6">
-              <Text className="text-white font-orbitron text-lg font-bold uppercase tracking-wider">
-                NUEVO RECORDATORIO
-              </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)} className="p-1">
-                <X size={24} color="#F8F9FA" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Alert Type Selection */}
-            <View className="mb-4 relative">
-              <Text className="text-neutral-400 text-xs uppercase mb-1.5 font-medium tracking-wide">
-                Categoría del Mantenimiento
-              </Text>
-              <TouchableOpacity
-                onPress={() => setIsTypeDropdownOpen(!isTypeDropdownOpen)}
-                className="flex-row justify-between items-center w-full bg-carbon-dark text-white border border-tarmac-light rounded-xl px-4 py-3"
-              >
-                <Text className="text-white font-semibold">{typeLabel}</Text>
-                <ChevronDown size={18} color="#00E5FF" />
-              </TouchableOpacity>
-
-              {isTypeDropdownOpen && (
-                <View className="absolute top-[75px] left-0 right-0 bg-tarmac border border-tarmac-light rounded-xl z-50 shadow-2xl">
-                  {ALERT_TYPES.map((item) => (
-                    <TouchableOpacity
-                      key={item.value}
-                      onPress={() => {
-                        setType(item.value as any);
-                        setTypeLabel(item.label);
-                        setTitle(item.label); // Auto seed title
-                        setIsTypeDropdownOpen(false);
-                      }}
-                      className="px-4 py-3 border-b border-carbon-matte"
-                    >
-                      <Text className="text-white font-medium">{item.label}</Text>
-                    </TouchableOpacity>
-                  ))}
+                {/* Header */}
+                <View className="flex-row justify-between items-center mb-6">
+                  <Text className={`font-orbitron text-lg font-bold uppercase tracking-wider ${colors.text}`}>
+                    NUEVO RECORDATORIO
+                  </Text>
+                  <TouchableOpacity onPress={() => setModalVisible(false)} className="p-1">
+                    <X size={24} color={theme === 'light' ? '#002C5B' : '#F8F9FA'} />
+                  </TouchableOpacity>
                 </View>
-              )}
-            </View>
 
-            {/* Custom Title */}
-            <View className="mb-4">
-              <Text className="text-neutral-400 text-xs uppercase mb-1.5 font-medium tracking-wide">
-                Título / Descripción
-              </Text>
-              <TextInput
-                value={title}
-                placeholder="Ej. Cambio de Aceite 15w50"
-                placeholderTextColor="#556070"
-                onChangeText={setTitle}
-                className="w-full bg-carbon-dark text-white border border-tarmac-light rounded-xl px-4 py-3 text-sm focus:border-speedo-cyan"
-              />
-            </View>
-
-            {/* Trigger Type Toggle */}
-            <View className="mb-4">
-              <Text className="text-neutral-400 text-xs uppercase mb-1.5 font-medium tracking-wide">
-                Gatillo del Recordatorio
-              </Text>
-              <View className="flex-row bg-carbon-dark border border-tarmac-light rounded-xl p-1">
-                <TouchableOpacity
-                  onPress={() => {
-                    setTriggerType('MILEAGE');
-                    setTriggerValue('');
-                  }}
-                  className={`flex-1 py-2 rounded-lg items-center ${
-                    triggerType === 'MILEAGE' ? 'bg-speedo-cyan' : ''
-                  }`}
-                >
-                  <Text
-                    className={`font-semibold text-xs uppercase tracking-wider ${
-                      triggerType === 'MILEAGE' ? 'text-carbon-matte font-bold' : 'text-neutral-400'
-                    }`}
-                  >
-                    Por Kilometraje
+                {/* Alert Type Selection */}
+                <View className="mb-4 relative">
+                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
+                    Categoría del Mantenimiento
                   </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => {
-                    setTriggerType('DATE');
-                    setTriggerValue(new Date().toISOString().split('T')[0]);
-                  }}
-                  className={`flex-1 py-2 rounded-lg items-center ${
-                    triggerType === 'DATE' ? 'bg-speedo-cyan' : ''
-                  }`}
-                >
-                  <Text
-                    className={`font-semibold text-xs uppercase tracking-wider ${
-                      triggerType === 'DATE' ? 'text-carbon-matte font-bold' : 'text-neutral-400'
-                    }`}
+                  <TouchableOpacity
+                    onPress={() => setIsTypeDropdownOpen(!isTypeDropdownOpen)}
+                    className={`flex-row justify-between items-center w-full ${colors.subCard} border ${colors.border} rounded-xl px-4 py-3`}
                   >
-                    Por Fecha
+                    <Text className={`${colors.text} font-semibold`}>{typeLabel}</Text>
+                    <ChevronDown size={18} color={activeBmwColor} />
+                  </TouchableOpacity>
+
+                  {isTypeDropdownOpen && (
+                    <View 
+                      className={`absolute top-[75px] left-0 right-0 border ${colors.border} rounded-xl`}
+                      style={{
+                        backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                        zIndex: 50,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 10 },
+                        shadowOpacity: theme === 'light' ? 0.05 : 0.4,
+                        shadowRadius: 15,
+                        elevation: 8
+                      }}
+                    >
+                      {ALERT_TYPES.map((item) => (
+                        <TouchableOpacity
+                          key={item.value}
+                          onPress={() => {
+                            setType(item.value as any);
+                            setTypeLabel(item.label);
+                            setTitle(item.label); // Auto seed title
+                            setIsTypeDropdownOpen(false);
+                          }}
+                          className={`px-4 py-3 border-b ${colors.border} active:${colors.subCard}`}
+                        >
+                          <Text className={`${colors.text} font-medium`}>{item.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                {/* Custom Title */}
+                <View className="mb-4">
+                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
+                    Título / Descripción
                   </Text>
+                  <TextInput
+                    value={title}
+                    placeholder="Ej. Cambio de Aceite 15w50"
+                    placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                    onChangeText={setTitle}
+                    className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-3 text-sm focus:border-[#1C69D4]`}
+                  />
+                </View>
+
+                {/* Trigger Type Toggle */}
+                <View className="mb-4">
+                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
+                    Gatillo del Recordatorio
+                  </Text>
+                  <View className={`flex-row ${colors.subCard} border ${colors.border} rounded-xl p-1`}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setTriggerType('MILEAGE');
+                        setTriggerValue('');
+                      }}
+                      className={`flex-1 py-2 rounded-lg items-center ${
+                        triggerType === 'MILEAGE' ? 'bg-[#1C69D4]' : ''
+                      }`}
+                    >
+                      <Text
+                        className={`font-semibold text-xs uppercase tracking-wider ${
+                          triggerType === 'MILEAGE' ? 'text-white font-bold' : colors.textMuted
+                        }`}
+                      >
+                        Por Kilometraje
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        setTriggerType('DATE');
+                        setTriggerValue(new Date().toISOString().split('T')[0]);
+                      }}
+                      className={`flex-1 py-2 rounded-lg items-center ${
+                        triggerType === 'DATE' ? 'bg-[#1C69D4]' : ''
+                      }`}
+                    >
+                      <Text
+                        className={`font-semibold text-xs uppercase tracking-wider ${
+                          triggerType === 'DATE' ? 'text-white font-bold' : colors.textMuted
+                        }`}
+                      >
+                        Por Fecha
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Trigger Value Input */}
+                <View className="mb-6">
+                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
+                    {triggerType === 'MILEAGE'
+                      ? 'Odómetro Objetivo (km)'
+                      : 'Fecha de Expiración (YYYY-MM-DD)'}
+                  </Text>
+                  <TextInput
+                    value={triggerValue}
+                    placeholder={triggerType === 'MILEAGE' ? 'Ej. 12000' : 'YYYY-MM-DD'}
+                    placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                    keyboardType={triggerType === 'MILEAGE' ? 'numeric' : 'default'}
+                    onChangeText={setTriggerValue}
+                    className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-3 text-sm focus:border-[#1C69D4]`}
+                  />
+                </View>
+
+                {/* Submit */}
+                <TouchableOpacity
+                  onPress={handleCreateAlert}
+                  disabled={saving}
+                  className="w-full bg-[#1C69D4] rounded-xl py-3.5 items-center justify-center border border-[#1C69D4]"
+                  style={{
+                    shadowColor: '#1C69D4',
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 12,
+                    elevation: 4
+                  }}
+                >
+                  {saving ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text className="text-white font-bold text-sm uppercase tracking-widest">
+                      GUARDAR ALERTA
+                    </Text>
+                  )}
                 </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Trigger Value Input */}
-            <View className="mb-6">
-              <Text className="text-neutral-400 text-xs uppercase mb-1.5 font-medium tracking-wide">
-                {triggerType === 'MILEAGE'
-                  ? 'Odómetro Objetivo (km)'
-                  : 'Fecha de Expiración (YYYY-MM-DD)'}
-              </Text>
-              <TextInput
-                value={triggerValue}
-                placeholder={triggerType === 'MILEAGE' ? 'Ej. 12000' : 'YYYY-MM-DD'}
-                placeholderTextColor="#556070"
-                keyboardType={triggerType === 'MILEAGE' ? 'numeric' : 'default'}
-                onChangeText={setTriggerValue}
-                className="w-full bg-carbon-dark text-white border border-tarmac-light rounded-xl px-4 py-3 text-sm focus:border-speedo-cyan"
-              />
-            </View>
-
-            {/* Submit */}
-            <TouchableOpacity
-              onPress={handleCreateAlert}
-              disabled={saving}
-              className="w-full bg-speedo-cyan rounded-xl py-3.5 items-center justify-center border border-speedo-cyan shadow-[0_0_12px_rgba(0,229,255,0.4)]"
-            >
-              {saving ? (
-                <ActivityIndicator color="#0B0D10" />
-              ) : (
-                <Text className="text-carbon-matte font-bold text-sm uppercase tracking-widest">
-                  GUARDAR ALERTA
-                </Text>
-              )}
-            </TouchableOpacity>
               </ScrollView>
             </View>
           </View>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text } from 'react-native';
+import { useTheme } from '../../utils/ThemeContext';
 
 interface TachometerGaugeProps {
   label: string;
@@ -16,6 +17,8 @@ export const TachometerGauge: React.FC<TachometerGaugeProps> = ({
   type,
   unit = 'km',
 }) => {
+  const { colors, theme } = useTheme();
+
   // Calculate percentage remaining
   let percentageRemaining = 100;
   let remaining = 0;
@@ -33,18 +36,15 @@ export const TachometerGauge: React.FC<TachometerGaugeProps> = ({
   }
 
   // Determine LED status colors
-  let ledColorClass = 'bg-kawasaki-green shadow-[0_0_10px_#2CFF0A]';
   let statusText = 'OK';
-  let textColorClass = 'text-kawasaki-green';
+  let statusColor = colors.statusGreen;
 
   if (percentageRemaining <= 15) {
-    ledColorClass = 'bg-ducati-red animate-pulse shadow-[0_0_12px_#FF2A3B]';
     statusText = 'CRÍTICO';
-    textColorClass = 'text-ducati-red font-bold';
+    statusColor = colors.bmwRed;
   } else if (percentageRemaining <= 40) {
-    ledColorClass = 'bg-ktm-orange shadow-[0_0_10px_#FF6B00]';
     statusText = 'ADVERTENCIA';
-    textColorClass = 'text-ktm-orange';
+    statusColor = colors.isDark ? '#FF6B00' : '#E65100';
   }
 
   // Draw 10 LED segments
@@ -52,53 +52,62 @@ export const TachometerGauge: React.FC<TachometerGaugeProps> = ({
   const filledSegments = Math.ceil((percentageRemaining / 100) * 10);
 
   return (
-    <View className="bg-tarmac border border-tarmac-light rounded-xl p-4 mb-3">
+    <View 
+      className={`${colors.card} rounded-xl p-4 mb-3`}
+      style={{
+        borderWidth: 1,
+        borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+      }}
+    >
       <View className="flex-row justify-between items-center mb-2">
-        <Text className="text-white font-medium text-base tracking-wide">{label}</Text>
-        <Text className={`text-xs uppercase tracking-widest font-semibold ${textColorClass}`}>
+        <Text className={`font-medium text-base tracking-wide ${colors.text}`}>{label}</Text>
+        <Text 
+          className="text-xs uppercase tracking-widest font-bold"
+          style={{ color: statusColor }}
+        >
           {statusText}
         </Text>
       </View>
 
       {/* LED Rev-counter segments */}
-      <View className="flex-row justify-between h-4 w-full bg-carbon-matte rounded-md p-0.5 overflow-hidden mb-3 border border-tarmac-light">
+      <View 
+        className={`flex-row justify-between h-4 w-full ${colors.isDark ? 'bg-[#0A0D12]' : 'bg-[#EBF0F5]'} rounded-md p-0.5 overflow-hidden mb-3 border ${colors.border}`}
+      >
         {segments.map((_, index) => {
           const isFilled = index < filledSegments;
-          let segmentColor = 'bg-neutral-800';
-
-          if (isFilled) {
-            if (index < 6) {
-              segmentColor = 'bg-kawasaki-green';
-            } else if (index < 9) {
-              segmentColor = 'bg-ktm-orange';
-            } else {
-              segmentColor = 'bg-ducati-red';
-            }
-          }
+          
+          const segmentBg = isFilled 
+            ? (index < 6 
+                ? colors.statusGreen 
+                : (index < 9 ? (colors.isDark ? '#FF6B00' : '#E65100') : colors.bmwRed))
+            : (colors.isDark ? '#2D3748' : '#D8E0EB');
 
           return (
             <View
               key={index}
-              className={`flex-1 mx-0.5 rounded-sm ${segmentColor} ${
+              className={`flex-1 mx-0.5 rounded-sm ${
                 isFilled && index === filledSegments - 1 ? 'opacity-90' : ''
               }`}
+              style={{ backgroundColor: segmentBg }}
             />
           );
         })}
       </View>
 
-      {/* Stats display in Speedometer mono font */}
+      {/* Stats display */}
       <View className="flex-row justify-between items-baseline">
-        <Text className="text-neutral-400 text-xs">
-          Restante: <Text className="font-orbitron text-white text-sm">
+        <Text className={`${colors.textSec} text-xs`}>
+          Restante:{' '}
+          <Text className={`font-orbitron font-semibold text-sm ${colors.text}`}>
             {type === 'MILEAGE' 
               ? `${remaining.toLocaleString()} ${unit}` 
               : `${remaining} ${remaining === 1 ? 'día' : 'días'}`
             }
           </Text>
         </Text>
-        <Text className="text-neutral-400 text-xs">
-          Límite: <Text className="font-orbitron text-neutral-300 text-sm">
+        <Text className={`${colors.textSec} text-xs`}>
+          Límite:{' '}
+          <Text className={`font-orbitron text-sm ${colors.textSec}`}>
             {type === 'MILEAGE'
               ? `${target.toLocaleString()} ${unit}`
               : new Date(target).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })

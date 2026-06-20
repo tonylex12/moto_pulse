@@ -27,16 +27,31 @@ export const api = axios.create({
 
 // Helper to set or clear the auth header globally in axios
 let authToken: string | null = null;
+let tokenResolver: (() => Promise<string | null>) | null = null;
 
 export const setAuthToken = (token: string | null) => {
   authToken = token;
 };
 
+export const setTokenResolver = (resolver: (() => Promise<string | null>) | null) => {
+  tokenResolver = resolver;
+};
+
 // Add request interceptor to dynamically inject the bearer token
 api.interceptors.request.use(
   async (config) => {
-    if (authToken) {
-      config.headers.Authorization = `Bearer ${authToken}`;
+    let token = authToken;
+    if (tokenResolver) {
+      try {
+        const resolved = await tokenResolver();
+        if (resolved) token = resolved;
+      } catch (err) {
+        console.error('Error resolving token in interceptor:', err);
+      }
+    }
+    
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
