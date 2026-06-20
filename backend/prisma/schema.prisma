@@ -1,0 +1,82 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  clerkId        String    @id
+  email          String
+  expoPushToken  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  vehicles       Vehicle[]
+}
+
+model Vehicle {
+  id             String             @id @default(uuid())
+  brand          String             // e.g., "Yamaha" or custom input
+  model          String
+  year           Int
+  currentMileage Int                // In kilometers
+  userId         String
+  user           User               @relation(fields: [userId], references: [clerkId], onDelete: Cascade)
+  fuelLogs       FuelLog[]
+  alerts         MaintenanceAlert[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+}
+
+model FuelLog {
+  id         String   @id @default(uuid())
+  odometer   Int      // Vehicle mileage at refuel
+  liters     Float    // Volume added
+  price      Float    // Total money spent
+  notes      String?  // Optional remarks
+  date       DateTime @default(now())
+  vehicleId  String
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+enum AlertType {
+  OIL_CHANGE
+  BRAKE_PADS
+  INSURANCE_RENEWAL
+  CUSTOM
+}
+
+enum TriggerType {
+  MILEAGE
+  DATE
+}
+
+model MaintenanceAlert {
+  id           String      @id @default(uuid())
+  type         AlertType
+  title        String      // Custom description of the alert
+  triggerType  TriggerType
+  triggerValue String      // Odometer mileage target (e.g. "15000") OR Date target (e.g. "2026-12-05T00:00:00.000Z")
+  isCompleted  Boolean     @default(false)
+  vehicleId    String
+  vehicle      Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model SavedRoute {
+  id          String   @id @default(uuid())
+  name        String
+  coordinates Json     // JSON array of coordinate points: { latitude: Float, longitude: Float }[]
+  startPoint  String?  // Text description of starting point
+  endPoint    String?  // Text description of ending point
+  distance    Float?   // Total distance in kilometers
+  notes       String?  // Riding conditions, twisties, etc.
+  userId      String   // Links to Clerk user ID
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
