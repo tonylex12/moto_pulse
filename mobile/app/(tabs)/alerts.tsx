@@ -338,7 +338,7 @@ export default function AlertsScreen() {
                   accentColor = '#FF9E00';
                   isWarning = true;
                 } else {
-                  accentColor = theme === 'light' ? '#008A22' : '#2CFF0A';
+                  accentColor = colors.statusGreen;
                 }
                 triggerDesc = `A LOS ${targetOdo.toLocaleString()} KM`;
               } else {
@@ -390,14 +390,14 @@ export default function AlertsScreen() {
                       </Text>
                       {alert.isCompleted && (
                         <View style={{ 
-                          backgroundColor: theme === 'light' ? 'rgba(0,138,34,0.06)' : 'rgba(44,255,10,0.12)', 
-                          borderColor: theme === 'light' ? '#008A22' : '#2CFF0A', 
+                          backgroundColor: colors.statusGreen + '15', 
+                          borderColor: colors.statusGreen, 
                           borderWidth: 0.5,
                           borderRadius: 4, 
                           paddingHorizontal: 6, 
                           paddingVertical: 1 
                         }}>
-                          <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 8, color: theme === 'light' ? '#008A22' : '#2CFF0A', textTransform: 'uppercase' }}>
+                          <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 8, color: colors.statusGreen, textTransform: 'uppercase' }}>
                             HECHO
                           </Text>
                         </View>
@@ -503,15 +503,15 @@ export default function AlertsScreen() {
                         }}
                         style={{
                           padding: 8,
-                          backgroundColor: theme === 'light' ? 'rgba(0,138,34,0.06)' : 'rgba(44,255,10,0.12)',
+                          backgroundColor: colors.statusGreen + '15',
                           borderRadius: 10,
-                          borderColor: theme === 'light' ? '#008A22' : '#2CFF0A',
+                          borderColor: colors.statusGreen,
                           borderWidth: 0.5,
                           justifyContent: 'center',
                           alignItems: 'center',
                         }}
                       >
-                        <Check size={14} color={theme === 'light' ? '#008A22' : '#2CFF0A'} />
+                        <Check size={14} color={colors.statusGreen} />
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity

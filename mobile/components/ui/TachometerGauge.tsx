@@ -85,36 +85,53 @@ export const TachometerGauge: React.FC<TachometerGaugeProps> = ({
         borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
       }}
     >
-      <View className="flex-row justify-between items-center mb-2">
-        <Text className={`font-rajdhani-bold text-base font-bold uppercase tracking-[1.5px] ${colors.text}`}>{label}</Text>
-        <View className="flex-row items-center">
-          <Text 
-            className="font-rajdhani-bold text-xs uppercase tracking-[2px] font-bold"
-            style={{ color: statusColor, marginRight: onPress ? 6 : 0 }}
-          >
-            {statusText}
+      <View className="flex-row justify-between items-start mb-3">
+        <View className="flex-1 mr-2">
+          <Text className={`font-rajdhani-bold text-base font-bold uppercase tracking-[1.5px] ${colors.text} mb-1.5`}>
+            {label}
           </Text>
-          {onPress && (
-            <TouchableOpacity 
-              onPress={onPress}
-              style={{
-                backgroundColor: 'rgba(28, 105, 212, 0.08)',
-                borderWidth: 1,
-                borderColor: 'rgba(28, 105, 212, 0.25)',
-                borderRadius: 6,
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                flexDirection: 'row',
-                alignItems: 'center',
-              }}
+          {/* Status Badge */}
+          <View 
+            style={{ 
+              alignSelf: 'flex-start',
+              backgroundColor: statusColor + '15',
+              borderColor: statusColor + '30',
+              borderWidth: 1,
+              borderRadius: 12,
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+            }}
+          >
+            <Text 
+              className="font-rajdhani-bold text-[10px] uppercase tracking-[1.5px] font-bold"
+              style={{ color: statusColor }}
             >
-              <Wrench size={10} color="#1C69D4" style={{ marginRight: 4 }} />
-              <Text className="font-rajdhani-bold text-[10px] text-[#1C69D4] font-bold uppercase tracking-wider">
-                Registrar
-              </Text>
-            </TouchableOpacity>
-          )}
+              {statusText}
+            </Text>
+          </View>
         </View>
+
+        {onPress && (
+          <TouchableOpacity 
+            onPress={onPress}
+            style={{
+              backgroundColor: 'rgba(28, 105, 212, 0.08)',
+              borderWidth: 1,
+              borderColor: 'rgba(28, 105, 212, 0.25)',
+              borderRadius: 20,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              flexDirection: 'row',
+              alignItems: 'center',
+              alignSelf: 'flex-start',
+            }}
+          >
+            <Wrench size={12} color="#1C69D4" style={{ marginRight: 6 }} />
+            <Text className="font-rajdhani-bold text-[10px] text-[#1C69D4] font-bold uppercase tracking-wider">
+              Registrar
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* LED Rev-counter segments */}

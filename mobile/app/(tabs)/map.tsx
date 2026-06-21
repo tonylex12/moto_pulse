@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT, UrlTile } from 'react-native-maps';
-import { Play, Square, Navigation, Bookmark, X, Eye, Trash2, Layers } from 'lucide-react-native';
+import { WebView } from 'react-native-webview';
+import { Play, Square, Navigation, Bookmark, X, Eye, Trash2 } from 'lucide-react-native';
 import { Accelerometer } from 'expo-sensors';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 
@@ -46,6 +47,7 @@ export default function RoutesMapScreen() {
   } = useLocation();
 
   const mapRef = useRef<MapView | null>(null);
+  const webViewRef = useRef<WebView | null>(null);
 
   // States
   const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
@@ -132,6 +134,40 @@ export default function RoutesMapScreen() {
 
   // Selected route to view on map
   const [selectedRoute, setSelectedRoute] = useState<SavedRoute | null>(null);
+
+  // WebView synchronization effects for Android
+  useEffect(() => {
+    if (Platform.OS === 'android' && webViewRef.current) {
+      const js = `if (window.setMapType) window.setMapType('${mapType}', ${colors.isDark});`;
+      webViewRef.current.injectJavaScript(js);
+    }
+  }, [mapType, colors.isDark]);
+
+  useEffect(() => {
+    if (Platform.OS === 'android' && currentLocation && webViewRef.current) {
+      const shouldCenter = !hasCenteredRef.current;
+      const js = `if (window.updateUserLocation) window.updateUserLocation(${currentLocation.latitude}, ${currentLocation.longitude}, ${shouldCenter});`;
+      webViewRef.current.injectJavaScript(js);
+      if (shouldCenter) {
+        hasCenteredRef.current = true;
+      }
+    }
+  }, [currentLocation]);
+
+  useEffect(() => {
+    if (Platform.OS === 'android' && webViewRef.current) {
+      const js = `if (window.updateRecordedRoute) window.updateRecordedRoute(${JSON.stringify(JSON.stringify(recordedRoute))});`;
+      webViewRef.current.injectJavaScript(js);
+    }
+  }, [recordedRoute]);
+
+  useEffect(() => {
+    if (Platform.OS === 'android' && webViewRef.current) {
+      const coords = selectedRoute ? selectedRoute.coordinates : [];
+      const js = `if (window.showSelectedRoute) window.showSelectedRoute(${JSON.stringify(JSON.stringify(coords))});`;
+      webViewRef.current.injectJavaScript(js);
+    }
+  }, [selectedRoute]);
 
   const fetchRoutes = async () => {
     try {
@@ -281,13 +317,20 @@ export default function RoutesMapScreen() {
 
   // Center map on user location
   const centerOnUser = () => {
-    if (currentLocation && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-        latitudeDelta: 0.015,
-        longitudeDelta: 0.015,
-      }, 1000);
+    if (currentLocation) {
+      if (Platform.OS === 'android') {
+        if (webViewRef.current) {
+          const js = `if (window.centerOnUser) window.centerOnUser(${currentLocation.latitude}, ${currentLocation.longitude});`;
+          webViewRef.current.injectJavaScript(js);
+        }
+      } else if (mapRef.current) {
+        mapRef.current.animateToRegion({
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          latitudeDelta: 0.015,
+          longitudeDelta: 0.015,
+        }, 1000);
+      }
     } else {
       requestPermissions();
     }
@@ -401,20 +444,27 @@ export default function RoutesMapScreen() {
     setSelectedRoute(route);
     setRoutesModalVisible(false);
 
-    if (route.coordinates.length > 0 && mapRef.current) {
-      const lats = route.coordinates.map(c => c.latitude);
-      const lons = route.coordinates.map(c => c.longitude);
-      const minLat = Math.min(...lats);
-      const maxLat = Math.max(...lats);
-      const minLon = Math.min(...lons);
-      const maxLon = Math.max(...lons);
+    if (route.coordinates.length > 0) {
+      if (Platform.OS === 'android') {
+        if (webViewRef.current) {
+          const js = `if (window.showSelectedRoute) window.showSelectedRoute(${JSON.stringify(JSON.stringify(route.coordinates))});`;
+          webViewRef.current.injectJavaScript(js);
+        }
+      } else if (mapRef.current) {
+        const lats = route.coordinates.map(c => c.latitude);
+        const lons = route.coordinates.map(c => c.longitude);
+        const minLat = Math.min(...lats);
+        const maxLat = Math.max(...lats);
+        const minLon = Math.min(...lons);
+        const maxLon = Math.max(...lons);
 
-      mapRef.current.animateToRegion({
-        latitude: (minLat + maxLat) / 2,
-        longitude: (minLon + maxLon) / 2,
-        latitudeDelta: (maxLat - minLat) * 1.3,
-        longitudeDelta: (maxLon - minLon) * 1.3,
-      }, 1000);
+        mapRef.current.animateToRegion({
+          latitude: (minLat + maxLat) / 2,
+          longitude: (minLon + maxLon) / 2,
+          latitudeDelta: (maxLat - minLat) * 1.3,
+          longitudeDelta: (maxLon - minLon) * 1.3,
+        }, 1000);
+      }
     }
   };
 
@@ -456,65 +506,75 @@ export default function RoutesMapScreen() {
             position: 'relative' 
           }}
         >
-          <MapView
-            ref={mapRef}
-            provider={PROVIDER_DEFAULT}
-            mapType={Platform.OS === 'android' ? 'none' : (mapType === 'standard' ? 'standard' : 'hybrid')}
-            style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            customMapStyle={mapType === 'standard' && Platform.OS === 'android' && colors.isDark ? darkMapStyle : undefined}
-            showsUserLocation={true}
-            showsMyLocationButton={false}
-            initialRegion={{
-              latitude: currentLocation?.latitude || 19.4326,
-              longitude: currentLocation?.longitude || -99.1332,
-              latitudeDelta: 0.05,
-              longitudeDelta: 0.05,
-            }}
-          >
-            {/* Custom URL Tiles overlay for Android (allows rendering high detail road and satellite maps without Google Maps API keys) */}
-            {Platform.OS === 'android' && (
-              <UrlTile
-                urlTemplate={
-                  mapType === 'hybrid'
-                    ? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                    : (colors.isDark
-                        ? "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
-                        : "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
+          {Platform.OS === 'android' ? (
+            <WebView
+              ref={webViewRef}
+              originWhitelist={['*']}
+              source={{ html: LEAFLET_HTML }}
+              style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              onLoadEnd={() => {
+                if (webViewRef.current) {
+                  const initJs = `
+                    if (window.setMapType) window.setMapType('${mapType}', ${colors.isDark});
+                    if (window.updateUserLocation && ${currentLocation ? 'true' : 'false'}) {
+                      window.updateUserLocation(${currentLocation?.latitude || 19.4326}, ${currentLocation?.longitude || -99.1332}, true);
+                    }
+                    if (window.showSelectedRoute && ${selectedRoute ? 'true' : 'false'}) {
+                      window.showSelectedRoute(${JSON.stringify(JSON.stringify(selectedRoute?.coordinates || []))});
+                    }
+                  `;
+                  webViewRef.current.injectJavaScript(initJs);
                 }
-                maximumZ={19}
-                tileSize={256}
-              />
-            )}
-            {/* Active recording route overlay */}
-            {isRecording && recordedRoute.length > 1 && (
-              <Polyline
-                coordinates={recordedRoute}
-                strokeColor={colors.bmwLightBlue}
-                strokeWidth={5}
-              />
-            )}
-
-            {/* Selected historical route overlay */}
-            {selectedRoute && selectedRoute.coordinates.length > 1 && (
-              <>
+              }}
+            />
+          ) : (
+            <MapView
+              ref={mapRef}
+              provider={PROVIDER_DEFAULT}
+              mapType={mapType === 'standard' ? 'standard' : 'hybrid'}
+              style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+              showsUserLocation={true}
+              showsMyLocationButton={false}
+              initialRegion={{
+                latitude: currentLocation?.latitude || 19.4326,
+                longitude: currentLocation?.longitude || -99.1332,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
+              }}
+            >
+              {/* Active recording route overlay */}
+              {isRecording && recordedRoute.length > 1 && (
                 <Polyline
-                  coordinates={selectedRoute.coordinates}
-                  strokeColor={colors.bmwRed}
+                  coordinates={recordedRoute}
+                  strokeColor={colors.bmwLightBlue}
                   strokeWidth={5}
                 />
-                <Marker
-                  coordinate={selectedRoute.coordinates[0]}
-                  title="Inicio"
-                  pinColor={colors.statusGreen}
-                />
-                <Marker
-                  coordinate={selectedRoute.coordinates[selectedRoute.coordinates.length - 1]}
-                  title="Fin"
-                  pinColor={colors.bmwRed}
-                />
-              </>
-            )}
-          </MapView>
+              )}
+
+              {/* Selected historical route overlay */}
+              {selectedRoute && selectedRoute.coordinates.length > 1 && (
+                <>
+                  <Polyline
+                    coordinates={selectedRoute.coordinates}
+                    strokeColor={colors.bmwRed}
+                    strokeWidth={5}
+                  />
+                  <Marker
+                    coordinate={selectedRoute.coordinates[0]}
+                    title="Inicio"
+                    pinColor={colors.statusGreen}
+                  />
+                  <Marker
+                    coordinate={selectedRoute.coordinates[selectedRoute.coordinates.length - 1]}
+                    title="Fin"
+                    pinColor={colors.bmwRed}
+                  />
+                </>
+              )}
+            </MapView>
+          )}
         </View>
 
         {/* Bottom Section: Camera view (Only when cameraModeActive is true) */}
@@ -858,22 +918,6 @@ export default function RoutesMapScreen() {
 
           {/* Right actions container */}
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            {/* Map Type layers button */}
-            <TouchableOpacity
-              onPress={() => setMapType((prev) => (prev === 'standard' ? 'hybrid' : 'standard'))}
-              className={`w-12 h-12 rounded-full ${colors.card} border ${colors.border} items-center justify-center`}
-              style={{
-                marginRight: 8,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: colors.isDark ? 0.3 : 0.08,
-                shadowRadius: 5,
-                elevation: 5
-              }}
-            >
-              <Layers size={20} color={mapType === 'hybrid' ? colors.bmwLightBlue : colors.bmwBlue} />
-            </TouchableOpacity>
-
             {/* GPS Center button */}
             <TouchableOpacity
               onPress={centerOnUser}
@@ -1114,3 +1158,126 @@ const darkMapStyle = [
   { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#07080a" }] },
   { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#556070" }] }
 ];
+
+// Local Leaflet Map source for Android (bypasses Google Maps API Key requirement)
+const LEAFLET_HTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <style>
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background-color: #0A0D12;
+    }
+    .leaflet-control-zoom {
+      display: none !important;
+    }
+    .leaflet-control-attribution {
+      font-size: 8px !important;
+      background: rgba(0,0,0,0.6) !important;
+      color: #8F9CAE !important;
+    }
+  </style>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var map = L.map('map', {
+      zoomControl: false,
+      attributionControl: false
+    }).setView([19.4326, -99.1332], 13);
+
+    var osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
+    var dark = L.tileLayer('https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', { maxZoom: 19 });
+    var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 });
+
+    var currentLayer = dark;
+    currentLayer.addTo(map);
+
+    var userMarker = null;
+    var userIcon = L.divIcon({
+      className: 'user-location-icon',
+      html: '<div style="width: 14px; height: 14px; background-color: #00A3E0; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 8px #00A3E0;"></div>',
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
+    });
+
+    var activePolyline = L.polyline([], { color: '#00A3E0', weight: 5 }).addTo(map);
+    var selectedPolyline = L.polyline([], { color: '#EF4444', weight: 5 }).addTo(map);
+    var startMarker = null;
+    var endMarker = null;
+
+    var startIcon = L.divIcon({
+      className: 'start-route-icon',
+      html: '<div style="width: 12px; height: 12px; background-color: #10B981; border: 2px solid white; border-radius: 50%;"></div>',
+      iconSize: [12, 12],
+      iconAnchor: [6, 6]
+    });
+
+    var endIcon = L.divIcon({
+      className: 'end-route-icon',
+      html: '<div style="width: 12px; height: 12px; background-color: #EF4444; border: 2px solid white; border-radius: 50%;"></div>',
+      iconSize: [12, 12],
+      iconAnchor: [6, 6]
+    });
+
+    window.setMapType = function(type, isDark) {
+      map.removeLayer(currentLayer);
+      if (type === 'hybrid') {
+        currentLayer = satellite;
+      } else {
+        currentLayer = isDark ? dark : osm;
+      }
+      currentLayer.addTo(map);
+    };
+
+    window.updateUserLocation = function(lat, lng, shouldCenter) {
+      var pos = [lat, lng];
+      if (!userMarker) {
+        userMarker = L.marker(pos, { icon: userIcon }).addTo(map);
+      } else {
+        userMarker.setLatLng(pos);
+      }
+      if (shouldCenter) {
+        map.setView(pos, 16);
+      }
+    };
+
+    window.updateRecordedRoute = function(coordsJson) {
+      var coords = JSON.parse(coordsJson);
+      var latlngs = coords.map(function(c) { return [c.latitude, c.longitude]; });
+      activePolyline.setLatLngs(latlngs);
+    };
+
+    window.showSelectedRoute = function(coordsJson) {
+      if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
+      if (endMarker) { map.removeLayer(endMarker); endMarker = null; }
+      
+      var coords = JSON.parse(coordsJson);
+      if (coords.length > 0) {
+        var latlngs = coords.map(function(c) { return [c.latitude, c.longitude]; });
+        selectedPolyline.setLatLngs(latlngs);
+        
+        startMarker = L.marker(latlngs[0], { icon: startIcon }).addTo(map);
+        endMarker = L.marker(latlngs[latlngs.length - 1], { icon: endIcon }).addTo(map);
+        
+        var bounds = L.latLngBounds(latlngs);
+        map.fitBounds(bounds, { padding: [30, 30] });
+      } else {
+        selectedPolyline.setLatLngs([]);
+      }
+    };
+
+    window.centerOnUser = function(lat, lng) {
+      map.setView([lat, lng], 16);
+    };
+  </script>
+</body>
+</html>
+`;

@@ -44,8 +44,8 @@ const lightColors: ThemeColors = {
   bmwBlue: '#1C69D4',
   bmwRed: '#E30613',
   bmwLightBlue: '#00A3E0',
-  statusGreen: '#008A22',
-  statusGreenBg: 'bg-[#008A22]',
+  statusGreen: '#34C759', // iOS Switch Green
+  statusGreenBg: 'bg-[#34C759]',
   isDark: false,
 };
 
@@ -63,8 +63,8 @@ const darkColors: ThemeColors = {
   bmwBlue: '#0066B2',
   bmwRed: '#FF1E27',
   bmwLightBlue: '#00A3E0',
-  statusGreen: '#2CFF0A', // Bright neon green
-  statusGreenBg: 'bg-[#2CFF0A]',
+  statusGreen: '#34C759', // iOS Switch Green
+  statusGreenBg: 'bg-[#34C759]',
   isDark: true,
 };
 

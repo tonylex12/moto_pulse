@@ -138,6 +138,51 @@ export default function DashboardScreen() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [fetchingSpecs, setFetchingSpecs] = useState(false);
 
+  // Edit Odometer States
+  const [editOdoModalVisible, setEditOdoModalVisible] = useState(false);
+  const [newOdometerValue, setNewOdometerValue] = useState("");
+  const [savingOdometer, setSavingOdometer] = useState(false);
+
+  const openEditOdoModal = () => {
+    if (!vehicle) return;
+    setNewOdometerValue(vehicle.currentMileage.toString());
+    setEditOdoModalVisible(true);
+  };
+
+  const handleSaveOdometer = async () => {
+    if (!vehicle) return;
+    const mileageVal = parseInt(newOdometerValue);
+    if (isNaN(mileageVal) || mileageVal < 0) {
+      showAlert("Error", "El odómetro debe ser un número válido mayor o igual a 0.");
+      return;
+    }
+
+    try {
+      setSavingOdometer(true);
+      const res = await api.put(`vehicles/${vehicle.id}`, {
+        brand: vehicle.brand,
+        model: vehicle.model,
+        year: vehicle.year,
+        currentMileage: mileageVal,
+      });
+
+      setVehicle(res.data);
+      setVehicles(prev => prev.map(v => v.id === vehicle.id ? res.data : v));
+      setEditOdoModalVisible(false);
+      
+      // Refresh alerts to reflect status changes due to the new mileage
+      const alertsResponse = await api.get(`alerts/vehicle/${vehicle.id}`);
+      setAlerts(alertsResponse.data);
+
+      showAlert('Odómetro Actualizado', `El odómetro se ha actualizado a ${mileageVal} km.`);
+    } catch (e) {
+      console.error('Error saving odometer mileage:', e);
+      showAlert('Error', 'No se pudo actualizar el odómetro.');
+    } finally {
+      setSavingOdometer(false);
+    }
+  };
+
   // Specs Edit Modal States
   const [editSpecsModalVisible, setEditSpecsModalVisible] = useState(false);
   const [editEngineCc, setEditEngineCc] = useState('');
@@ -482,8 +527,8 @@ export default function DashboardScreen() {
     timeText: theme === "light" ? "#4E5E72" : "#8E9FBC",
     speedText: theme === "light" ? "#002C5B" : "#FFFFFF",
     speedUnit: theme === "light" ? "#4E5E72" : "#8E9FBC",
-    gearBg: theme === "light" ? "rgba(0, 138, 34, 0.08)" : "rgba(0, 138, 34, 0.15)",
-    gearText: theme === "light" ? "#008A22" : "#2CFF0A",
+    gearBg: "rgba(52, 199, 89, 0.12)",
+    gearText: "#34C759",
     gearLabel: theme === "light" ? "#4E5E72" : "#8E9FBC",
     odoTitle: theme === "light" ? "#4E5E72" : "#8E9FBC",
     odoBg: theme === "light" ? "#D8E0EB" : "#0A0D12",
@@ -494,7 +539,7 @@ export default function DashboardScreen() {
     odoUnit: theme === "light" ? "#1C69D4" : "#00E5FF",
     footerText: theme === "light" ? "#002C5B" : "#FFFFFF",
     footerSecText: theme === "light" ? "#4E5E72" : "#8E9FBC",
-    statusLed: theme === "light" ? "#008A22" : "#2CFF0A",
+    statusLed: "#34C759",
     rpmLedEmptyBg: theme === "light" ? "#D8E0EB" : "#EBF0F5",
     rpmLedEmptyOpacity: theme === "light" ? 0.6 : 0.1,
   };
@@ -661,9 +706,9 @@ export default function DashboardScreen() {
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: tftStyles.headerBorder, paddingBottom: 8 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#008A22' }} />
-                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#008A22' }} />
-                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#008A22' }} />
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: tftStyles.statusLed }} />
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: tftStyles.statusLed }} />
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: tftStyles.statusLed }} />
                       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: tftStyles.rpmLedEmptyBg, opacity: tftStyles.rpmLedEmptyOpacity }} />
                       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: tftStyles.rpmLedEmptyBg, opacity: tftStyles.rpmLedEmptyOpacity }} />
                       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF1E27', opacity: 0.1 }} />
@@ -696,7 +741,7 @@ export default function DashboardScreen() {
                           borderRadius: 6, 
                           backgroundColor: tftStyles.gearBg, 
                           borderWidth: 1, 
-                          borderColor: '#008A22',
+                          borderColor: tftStyles.statusLed,
                           alignItems: 'center',
                           justifyContent: 'center'
                         }}>
@@ -715,18 +760,22 @@ export default function DashboardScreen() {
                         ODÓMETRO TOTAL
                       </Text>
                       
-                      <View style={{ 
-                        backgroundColor: tftStyles.odoBg, 
-                        borderRadius: 8, 
-                        borderWidth: 1, 
-                        borderColor: tftStyles.odoBorder,
-                        paddingVertical: 6, 
-                        paddingHorizontal: 12,
-                        position: 'relative',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        minWidth: 140
-                      }}>
+                      <TouchableOpacity 
+                        onPress={openEditOdoModal}
+                        activeOpacity={0.7}
+                        style={{ 
+                          backgroundColor: tftStyles.odoBg, 
+                          borderRadius: 8, 
+                          borderWidth: 1, 
+                          borderColor: tftStyles.odoBorder,
+                          paddingVertical: 6, 
+                          paddingHorizontal: 12,
+                          position: 'relative',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          minWidth: 140
+                        }}
+                      >
                         <Text
                           style={{
                             fontFamily: 'Orbitron-Bold',
@@ -752,10 +801,10 @@ export default function DashboardScreen() {
                         >
                           {String(vehicle.currentMileage).padStart(6, '0')}
                         </Text>
-                      </View>
+                      </TouchableOpacity>
 
-                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 9, color: tftStyles.odoUnit, marginTop: 4, letterSpacing: 0.5 }}>
-                        TOTAL KM
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 8, color: tftStyles.odoUnit, marginTop: 4, letterSpacing: 0.5 }}>
+                        TOCA PARA EDITAR
                       </Text>
                     </View>
                   </View>
@@ -1837,6 +1886,77 @@ export default function DashboardScreen() {
                   )}
                 </TouchableOpacity>
               </ScrollView>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit Odometer Modal */}
+      <Modal visible={editOdoModalVisible} animationType="slide" transparent={true}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          className="flex-1"
+        >
+          <View className="flex-1 bg-black/60 justify-end">
+            <View 
+              className={`${colors.card} border-t ${colors.border} rounded-t-3xl p-6`}
+              style={{
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -10 },
+                shadowOpacity: colors.isDark ? 0.4 : 0.1,
+                shadowRadius: 15,
+                elevation: 8
+              }}
+            >
+              <View className="flex-row justify-between items-center mb-6">
+                <Text className={`${colors.text} font-rajdhani-bold text-base font-bold uppercase tracking-[2px]`}>
+                  AJUSTAR ODÓMETRO
+                </Text>
+                <TouchableOpacity onPress={() => setEditOdoModalVisible(false)} className="p-1">
+                  <X size={24} color={colors.isDark ? '#F8F9FA' : '#4E5E72'} />
+                </TouchableOpacity>
+              </View>
+
+              <Text className={`${colors.textSec} text-xs mb-6`}>
+                Ingresa el kilometraje actual total de tu motocicleta. Esto actualizará el estado de todos tus recordatorios y mantenimientos basados en distancia.
+              </Text>
+
+              <View className="mb-6">
+                <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
+                  Kilometraje Actual (KM)
+                </Text>
+                <TextInput
+                  value={newOdometerValue}
+                  placeholder="Ej. 12500"
+                  placeholderTextColor={colors.isDark ? '#556070' : '#8E9FBC'}
+                  keyboardType="number-pad"
+                  onChangeText={setNewOdometerValue}
+                  className={`w-full ${colors.isDark ? 'bg-[#1A202C]' : 'bg-[#F4F5F7]'} ${colors.isDark ? 'border ' + colors.border : ''} rounded-xl px-4 py-3 text-sm text-black dark:text-white`}
+                />
+              </View>
+
+              <TouchableOpacity
+                onPress={handleSaveOdometer}
+                disabled={savingOdometer}
+                className="w-full rounded-xl py-3.5 items-center justify-center border"
+                style={{
+                  backgroundColor: colors.bmwBlue,
+                  borderColor: colors.bmwBlue,
+                  shadowColor: colors.bmwBlue,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 4
+                }}
+              >
+                {savingOdometer ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text className="text-white font-bold text-sm uppercase tracking-widest">
+                    GUARDAR KILOMETRAJE
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>

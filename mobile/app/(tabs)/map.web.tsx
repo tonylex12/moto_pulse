@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Bookmark, Navigation, Phone, Eye, Trash2, Globe, Play, Square, Route } from 'lucide-react-native';
+import { Bookmark, Navigation, Phone, Eye, Trash2, Globe, Play, Square, Route, X } from 'lucide-react-native';
 import { api } from '../../utils/api';
 import { useTheme } from '../../utils/ThemeContext';
 
 interface SavedRoute {
   id: string;
   name: string;
+  coordinates: any[];
   distance: number | null;
   startPoint: string | null;
   endPoint: string | null;
@@ -27,10 +28,39 @@ export default function RoutesMapWebScreen() {
   const [maxRightLean, setMaxRightLean] = useState(0);
   const [simDistance, setSimDistance] = useState(0);
 
+  const [mapType, setMapType] = useState<'standard' | 'hybrid'>('standard');
+  const [selectedRoute, setSelectedRoute] = useState<SavedRoute | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  // Sync state to iframe on change
+  useEffect(() => {
+    if (iframeRef.current && iframeRef.current.contentWindow) {
+      iframeRef.current.contentWindow.postMessage({
+        type: 'SET_MAP_TYPE',
+        mapType,
+        isDark: colors.isDark
+      }, '*');
+    }
+  }, [mapType, colors.isDark]);
+
+  useEffect(() => {
+    if (iframeRef.current && iframeRef.current.contentWindow) {
+      const coords = selectedRoute ? selectedRoute.coordinates : [];
+      iframeRef.current.contentWindow.postMessage({
+        type: 'SHOW_SELECTED_ROUTE',
+        coordsJson: JSON.stringify(coords)
+      }, '*');
+    }
+  }, [selectedRoute]);
+
   const fetchRoutes = async () => {
     try {
       const res = await api.get('/routes');
-      setSavedRoutes(res.data);
+      const formatted = res.data.map((r: any) => ({
+        ...r,
+        coordinates: typeof r.coordinates === 'string' ? JSON.parse(r.coordinates) : r.coordinates
+      }));
+      setSavedRoutes(formatted);
     } catch (e) {
       console.error('Error fetching saved routes on web:', e);
     } finally {
@@ -240,38 +270,90 @@ export default function RoutesMapWebScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            <View className={`max-w-md items-center text-center p-6 ${colors.card} border ${colors.border} rounded-2xl shadow-xl`}>
-              <View className={`w-12 h-12 rounded-full ${colors.isDark ? 'bg-[#00A3E0]/20' : 'bg-[#1C69D4]/20'} items-center justify-center mb-4`}>
-                <Route size={24} color={colors.bmwBlue} />
-              </View>
-              <Text className={`${colors.text} font-orbitron text-base font-bold uppercase mb-2`}>
-                Rastreo GPS & Telemetría
-              </Text>
-              <Text className={`${colors.textMuted} text-xs leading-relaxed mb-6`}>
-                La grabación de rutas y la telemetría TFT en tiempo real (velocidad e inclinación) utilizan sensores nativos de tu celular. 
-                Inicia la simulación para visualizar cómo opera el HUD interactivo de curvas y velocidad en la aplicación móvil.
-              </Text>
-
-              <View className="w-full flex-col space-y-3">
+            <View style={{ width: '100%', height: '100%', position: 'relative' }}>
+              <iframe
+                ref={iframeRef}
+                srcDoc={LEAFLET_HTML}
+                style={{ width: '100%', height: '100%', border: 'none', borderRadius: 16 }}
+                onLoad={() => {
+                  if (iframeRef.current && iframeRef.current.contentWindow) {
+                    iframeRef.current.contentWindow.postMessage({
+                      type: 'INIT',
+                      mapType,
+                      isDark: colors.isDark
+                    }, '*');
+                  }
+                }}
+              />
+              {/* Floating controls */}
+              <View style={{ position: 'absolute', bottom: 16, right: 16, flexDirection: 'row', alignItems: 'center', zIndex: 10 }}>
                 <TouchableOpacity
-                  onPress={startSimulation}
-                  className="w-full flex-row items-center justify-center space-x-2 rounded-xl py-3 border"
+                  onPress={() => {
+                    if (iframeRef.current && iframeRef.current.contentWindow) {
+                      iframeRef.current.contentWindow.postMessage({
+                        type: 'SHOW_SELECTED_ROUTE',
+                        coordsJson: JSON.stringify(selectedRoute ? selectedRoute.coordinates : [])
+                      }, '*');
+                    }
+                  }}
+                  className={`w-10 h-10 rounded-full ${colors.card} border ${colors.border} items-center justify-center`}
                   style={{
-                    backgroundColor: colors.bmwBlue,
-                    borderColor: colors.bmwBlue,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 3,
                   }}
                 >
-                  <Play size={16} color="#FFFFFF" className="ml-1" />
-                  <Text className="text-white font-bold text-xs uppercase tracking-wider">PROBAR SIMULADOR TFT</Text>
+                  <Navigation size={18} color={colors.statusGreen} />
                 </TouchableOpacity>
-
-                <View className={`flex-row items-center justify-center ${colors.isDark ? 'bg-[#1A202C]' : 'bg-[#EBF0F5]'} border ${colors.border} rounded-xl p-3 w-full space-x-3`}>
-                  <Phone size={18} color={colors.bmwBlue} />
-                  <Text className={`${colors.textSec} text-xxs font-semibold uppercase tracking-wider`}>
-                    Disponible en iOS y Android
-                  </Text>
-                </View>
               </View>
+
+              {/* Simulation Launcher Top Banner */}
+              <View 
+                className="absolute top-4 left-4 right-4 bg-[#0F1216]/95 border border-[#00A3E0]/30 rounded-xl p-3 flex-row items-center justify-between z-10"
+                style={{
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 6,
+                }}
+              >
+                <View className="flex-1 mr-4">
+                  <Text className="text-white font-bold text-xs uppercase tracking-wide">RASTREO GPS & MAPAS</Text>
+                  <Text className="text-[#8F9CAE] text-[10px] mt-0.5">Visualiza tus curvas y rutas favoritas guardadas o inicia la simulación de telemetría.</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={startSimulation}
+                  className="bg-[#00A3E0] rounded-lg px-3 py-1.5 border border-[#00A3E0] shadow-sm flex-row items-center space-x-1"
+                >
+                  <Play size={12} color="#FFFFFF" />
+                  <Text className="text-white font-bold text-[10px] uppercase tracking-wider">SIMULAR</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Selected Route Info banner on the map */}
+              {selectedRoute && (
+                <View 
+                  className="absolute bottom-4 left-4 right-16 bg-[#0F1216]/95 border border-[#EF4444]/30 rounded-xl p-3 flex-row items-center justify-between z-10"
+                  style={{
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 6,
+                  }}
+                >
+                  <View className="flex-grow">
+                    <Text className="text-[#EF4444] text-[8px] font-barlow-condensed-bold font-bold uppercase tracking-wider">VIENDO RUTA</Text>
+                    <Text className="text-white font-bold text-xs mt-0.5">{selectedRoute.name}</Text>
+                    {selectedRoute.distance && (
+                      <Text className="font-orbitron text-[10px] font-semibold mt-0.5" style={{ color: colors.bmwBlue }}>{selectedRoute.distance} km</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity onPress={() => setSelectedRoute(null)} className="p-1">
+                    <X size={16} color={colors.bmwRed} />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -313,7 +395,7 @@ export default function RoutesMapWebScreen() {
                       
                       <View className="flex-row space-x-2 ml-4">
                         <TouchableOpacity
-                          onPress={() => alert('Para visualizar el recorrido en el mapa, abre la aplicación en tu celular.')}
+                          onPress={() => setSelectedRoute(route)}
                           className={`${colors.isDark ? 'bg-[#1A202C]' : 'bg-[#EBF0F5]'} border ${colors.border} p-2 rounded-lg`}
                         >
                           <Eye size={16} color={colors.bmwBlue} />
@@ -344,3 +426,105 @@ export default function RoutesMapWebScreen() {
     </SafeAreaView>
   );
 }
+
+// Leaflet HTML template for Web iframe map
+const LEAFLET_HTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <style>
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background-color: #0A0D12;
+    }
+    .leaflet-control-zoom {
+      display: block !important;
+    }
+    .leaflet-control-attribution {
+      font-size: 8px !important;
+      background: rgba(0,0,0,0.6) !important;
+      color: #8F9CAE !important;
+    }
+  </style>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var map = L.map('map', {
+      zoomControl: true,
+      attributionControl: true
+    }).setView([19.4326, -99.1332], 13);
+
+    var osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
+    var dark = L.tileLayer('https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', { maxZoom: 19 });
+    var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 });
+
+    var currentLayer = dark;
+    currentLayer.addTo(map);
+
+    var selectedPolyline = L.polyline([], { color: '#EF4444', weight: 5 }).addTo(map);
+    var startMarker = null;
+    var endMarker = null;
+
+    var startIcon = L.divIcon({
+      className: 'start-route-icon',
+      html: '<div style="width: 12px; height: 12px; background-color: #10B981; border: 2px solid white; border-radius: 50%;"></div>',
+      iconSize: [12, 12],
+      iconAnchor: [6, 6]
+    });
+
+    var endIcon = L.divIcon({
+      className: 'end-route-icon',
+      html: '<div style="width: 12px; height: 12px; background-color: #EF4444; border: 2px solid white; border-radius: 50%;"></div>',
+      iconSize: [12, 12],
+      iconAnchor: [6, 6]
+    });
+
+    window.setMapType = function(type, isDark) {
+      map.removeLayer(currentLayer);
+      if (type === 'hybrid') {
+        currentLayer = satellite;
+      } else {
+        currentLayer = isDark ? dark : osm;
+      }
+      currentLayer.addTo(map);
+    };
+
+    window.showSelectedRoute = function(coordsJson) {
+      if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
+      if (endMarker) { map.removeLayer(endMarker); endMarker = null; }
+      
+      var coords = JSON.parse(coordsJson);
+      if (coords.length > 0) {
+        var latlngs = coords.map(function(c) { return [c.latitude, c.longitude]; });
+        selectedPolyline.setLatLngs(latlngs);
+        
+        startMarker = L.marker(latlngs[0], { icon: startIcon }).addTo(map);
+        endMarker = L.marker(latlngs[latlngs.length - 1], { icon: endIcon }).addTo(map);
+        
+        var bounds = L.latLngBounds(latlngs);
+        map.fitBounds(bounds, { padding: [30, 30] });
+      } else {
+        selectedPolyline.setLatLngs([]);
+      }
+    };
+
+    window.addEventListener('message', function(event) {
+      var data = event.data;
+      if (!data) return;
+      if (data.type === 'INIT' || data.type === 'SET_MAP_TYPE') {
+        window.setMapType(data.mapType, data.isDark);
+      } else if (data.type === 'SHOW_SELECTED_ROUTE') {
+        window.showSelectedRoute(data.coordsJson);
+      }
+    });
+  </script>
+</body>
+</html>
+`;
