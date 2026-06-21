@@ -1307,16 +1307,10 @@ export default function DashboardScreen() {
                   {/* Dropdown Options List */}
                   {isBrandDropdownOpen && (
                     <View
-                      className={`absolute top-[75px] left-0 right-0 border ${colors.border} rounded-xl max-h-52 overflow-hidden`}
+                      className={`mt-2 border ${colors.border} rounded-xl max-h-52 overflow-hidden`}
                       style={{
                         backgroundColor:
                           theme === "light" ? "#FFFFFF" : "#121620",
-                        zIndex: 50,
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 10 },
-                        shadowOpacity: theme === "light" ? 0.05 : 0.4,
-                        shadowRadius: 15,
-                        elevation: 8,
                       }}
                     >
                       <ScrollView nestedScrollEnabled={true}>

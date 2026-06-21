@@ -90,14 +90,18 @@ model MaintenanceAlert {
 }
 
 model SavedRoute {
-  id          String   @id @default(uuid())
-  name        String
-  coordinates Json     // JSON array of coordinate points: { latitude: Float, longitude: Float }[]
-  startPoint  String?  // Text description of starting point
-  endPoint    String?  // Text description of ending point
-  distance    Float?   // Total distance in kilometers
-  notes       String?  // Riding conditions, twisties, etc.
-  userId      String   // Links to Clerk user ID
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  name         String
+  coordinates  Json     // JSON array of coordinate points: { latitude: Float, longitude: Float }[]
+  startPoint   String?  // Text description of starting point
+  endPoint     String?  // Text description of ending point
+  distance     Float?   // Total distance in kilometers
+  notes        String?  // Riding conditions, twisties, etc.
+  maxSpeed     Float?   // Maximum speed recorded on the route (km/h)
+  maxLeftLean  Float?   // Maximum left lean angle (degrees)
+  maxRightLean Float?   // Maximum right lean angle (degrees)
+  userId       String   // Links to Clerk user ID
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
+

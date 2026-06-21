@@ -13,6 +13,9 @@ interface SavedRoute {
   startPoint: string | null;
   endPoint: string | null;
   notes: string | null;
+  maxSpeed?: number | null;
+  maxLeftLean?: number | null;
+  maxRightLean?: number | null;
 }
 
 export default function RoutesMapWebScreen() {
@@ -379,9 +382,27 @@ export default function RoutesMapWebScreen() {
                       <View className="flex-1">
                         <Text className={`${colors.text} font-bold text-base`}>{route.name}</Text>
                         {route.distance && (
-                          <Text className="font-orbitron text-xs font-semibold mt-0.5" style={{ color: colors.bmwBlue }}>
-                            {route.distance} km
-                          </Text>
+                          <View className="flex-row flex-wrap items-center mt-1">
+                            <Text className="font-orbitron text-xs font-semibold" style={{ color: colors.bmwBlue }}>
+                              {route.distance.toFixed(1)} km
+                            </Text>
+                            {route.maxSpeed !== undefined && route.maxSpeed !== null && (
+                              <>
+                                <Text className="text-xs font-barlow-condensed-bold mx-2 uppercase" style={{ color: colors.textMuted }}>•</Text>
+                                <Text className="font-rajdhani-semibold text-xs font-semibold" style={{ color: colors.textSec }}>
+                                  MÁX VEL: {Math.round(route.maxSpeed)} km/h
+                                </Text>
+                              </>
+                            )}
+                            {route.maxLeftLean !== undefined && route.maxLeftLean !== null && (
+                              <>
+                                <Text className="text-xs font-barlow-condensed-bold mx-2 uppercase" style={{ color: colors.textMuted }}>•</Text>
+                                <Text className="font-rajdhani-semibold text-xs font-semibold" style={{ color: colors.textSec }}>
+                                  MÁX INC: L{Math.round(route.maxLeftLean)}° | R{Math.round(route.maxRightLean || 0)}°
+                                </Text>
+                              </>
+                            )}
+                          </View>
                         )}
                         {(route.startPoint || route.endPoint) && (
                           <Text className={`${colors.textSec} text-xs mt-1.5`}>

@@ -643,41 +643,36 @@ export default function AlertsScreen() {
                       {isTypeDropdownOpen && (
                         <View 
                           style={{
-                            position: 'absolute',
-                            top: 75,
-                            left: 0,
-                            right: 0,
+                            marginTop: 8,
                             borderWidth: 1,
                             borderColor: tftStyles.cardBorder,
                             borderRadius: 12,
                             backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
-                            zIndex: 100,
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 10 },
-                            shadowOpacity: theme === 'light' ? 0.05 : 0.4,
-                            shadowRadius: 15,
-                            elevation: 8
+                            maxHeight: 200,
+                            overflow: 'hidden',
                           }}
                         >
-                          {ALERT_TYPES.map((item) => (
-                            <TouchableOpacity
-                              key={item.value}
-                              onPress={() => {
-                                setType(item.value as any);
-                                setTypeLabel(item.label);
-                                setTitle(item.label);
-                                setIsTypeDropdownOpen(false);
-                              }}
-                              style={{
-                                paddingHorizontal: 16,
-                                paddingVertical: 12,
-                                borderBottomWidth: 0.5,
-                                borderBottomColor: tftStyles.cardBorder,
-                              }}
-                            >
-                              <Text style={{ fontFamily: 'Rajdhani-SemiBold', fontSize: 14, color: tftStyles.textMain }}>{item.label}</Text>
-                            </TouchableOpacity>
-                          ))}
+                          <ScrollView nestedScrollEnabled={true}>
+                            {ALERT_TYPES.map((item) => (
+                              <TouchableOpacity
+                                key={item.value}
+                                onPress={() => {
+                                  setType(item.value as any);
+                                  setTypeLabel(item.label);
+                                  setTitle(item.label);
+                                  setIsTypeDropdownOpen(false);
+                                }}
+                                style={{
+                                  paddingHorizontal: 16,
+                                  paddingVertical: 12,
+                                  borderBottomWidth: 0.5,
+                                  borderBottomColor: tftStyles.cardBorder,
+                                }}
+                              >
+                                <Text style={{ fontFamily: 'Rajdhani-SemiBold', fontSize: 14, color: tftStyles.textMain }}>{item.label}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
                         </View>
                       )}
                     </View>

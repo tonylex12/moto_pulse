@@ -17,6 +17,9 @@ const routeSchema = z.object({
   endPoint: z.string().optional().nullable(),
   distance: z.number().nonnegative().optional().nullable(), // in km
   notes: z.string().optional().nullable(),
+  maxSpeed: z.number().nonnegative().optional().nullable(),
+  maxLeftLean: z.number().nonnegative().optional().nullable(),
+  maxRightLean: z.number().nonnegative().optional().nullable(),
 });
 
 // GET all saved routes for user
@@ -48,7 +51,7 @@ router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: parsed.error.errors[0].message });
     }
 
-    const { name, coordinates, startPoint, endPoint, distance, notes } = parsed.data;
+    const { name, coordinates, startPoint, endPoint, distance, notes, maxSpeed, maxLeftLean, maxRightLean } = parsed.data;
 
     // Convert coordinates to JSON format for Prisma
     const coordsJson = JSON.parse(JSON.stringify(coordinates));
@@ -61,6 +64,9 @@ router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
         endPoint,
         distance,
         notes,
+        maxSpeed,
+        maxLeftLean,
+        maxRightLean,
         userId: clerkId,
       },
     });

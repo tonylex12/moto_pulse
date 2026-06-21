@@ -28,6 +28,9 @@ interface SavedRoute {
   endPoint: string | null;
   distance: number | null;
   notes: string | null;
+  maxSpeed?: number | null;
+  maxLeftLean?: number | null;
+  maxRightLean?: number | null;
 }
 
 export default function RoutesMapScreen() {
@@ -60,6 +63,7 @@ export default function RoutesMapScreen() {
   const [leanAngle, setLeanAngle] = useState(0);
   const [maxLeftLean, setMaxLeftLean] = useState(0);
   const [maxRightLean, setMaxRightLean] = useState(0);
+  const [maxSpeed, setMaxSpeed] = useState(0);
   const [simSpeed, setSimSpeed] = useState(0);
   const [simLean, setSimLean] = useState(0);
 
@@ -285,6 +289,15 @@ export default function RoutesMapScreen() {
     return () => clearInterval(interval);
   }, [isRecording, hasAccelerometer]);
 
+  // Track peak speed during recording
+  useEffect(() => {
+    if (!isRecording) return;
+    const currentSpeed = (Platform.OS === 'web' || hasAccelerometer === false) ? simSpeed : speed;
+    if (currentSpeed > maxSpeed) {
+      setMaxSpeed(currentSpeed);
+    }
+  }, [speed, simSpeed, isRecording, maxSpeed]);
+
   // Simple blinking state for GPS/Video recording indicators to avoid NativeWind CSSInterop animation warnings
   const [hudBlink, setHudBlink] = useState(true);
   useEffect(() => {
@@ -347,6 +360,7 @@ export default function RoutesMapScreen() {
     setLeanAngle(0);
     setMaxLeftLean(0);
     setMaxRightLean(0);
+    setMaxSpeed(0);
     setSimLean(0);
     setSimSpeed(0);
     await startRecording();
@@ -415,6 +429,9 @@ export default function RoutesMapScreen() {
         endPoint: endPoint.trim() || undefined,
         distance: totalDistance,
         notes: routeNotes.trim() || undefined,
+        maxSpeed: maxSpeed || undefined,
+        maxLeftLean: maxLeftLean || undefined,
+        maxRightLean: maxRightLean || undefined,
       };
 
       // Changed to relative path without leading slash
@@ -1093,9 +1110,27 @@ export default function RoutesMapScreen() {
                         <View className="flex-1">
                           <Text className={`${colors.text} font-bold text-base`}>{route.name}</Text>
                           {route.distance && (
-                            <Text className="font-rajdhani-semibold text-xs font-semibold mt-0.5" style={{ color: colors.bmwBlue }}>
-                              {route.distance} km
-                            </Text>
+                            <View className="flex-row flex-wrap items-center mt-1">
+                              <Text className="font-rajdhani-semibold text-xs font-semibold" style={{ color: colors.bmwBlue }}>
+                                {route.distance.toFixed(1)} km
+                              </Text>
+                              {route.maxSpeed !== undefined && route.maxSpeed !== null && (
+                                <>
+                                  <Text className="text-xs font-barlow-condensed-bold mx-2 uppercase" style={{ color: colors.textMuted }}>•</Text>
+                                  <Text className="font-rajdhani-semibold text-xs font-semibold" style={{ color: colors.textSec }}>
+                                    MÁX VEL: {Math.round(route.maxSpeed)} km/h
+                                  </Text>
+                                </>
+                              )}
+                              {route.maxLeftLean !== undefined && route.maxLeftLean !== null && (
+                                <>
+                                  <Text className="text-xs font-barlow-condensed-bold mx-2 uppercase" style={{ color: colors.textMuted }}>•</Text>
+                                  <Text className="font-rajdhani-semibold text-xs font-semibold" style={{ color: colors.textSec }}>
+                                    MÁX INC: L{Math.round(route.maxLeftLean)}° | R{Math.round(route.maxRightLean || 0)}°
+                                  </Text>
+                                </>
+                              )}
+                            </View>
                           )}
                           {(route.startPoint || route.endPoint) && (
                             <Text className={`${colors.textSec} text-xs mt-1.5`}>
