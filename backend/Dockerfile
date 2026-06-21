@@ -1,6 +1,8 @@
 # Stage 1: Build stage
 FROM node:20-alpine AS builder
 
+RUN apk add --no-cache openssl libc6-compat
+
 WORKDIR /app
 
 # Copy package files and install all dependencies (including devDependencies)
@@ -18,6 +20,8 @@ RUN npm run build
 
 # Stage 2: Runner stage
 FROM node:20-alpine AS runner
+
+RUN apk add --no-cache openssl libc6-compat
 
 WORKDIR /app
 
