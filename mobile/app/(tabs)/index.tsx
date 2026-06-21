@@ -455,11 +455,18 @@ export default function DashboardScreen() {
   };
 
   const handleDeleteVehicle = (id: string, name: string) => {
+    setIsGarageOpen(false);
     showAlert(
       "Eliminar Motocicleta",
       `¿Estás seguro de que deseas eliminar la motocicleta ${name} de tu garaje? Se borrarán también todos sus registros e historial. Esta acción no se puede deshacer.`,
       [
-        { text: "Cancelar", style: "cancel" },
+        { 
+          text: "Cancelar", 
+          style: "cancel",
+          onPress: () => {
+            setIsGarageOpen(true);
+          }
+        },
         { 
           text: "Eliminar", 
           style: "destructive", 
