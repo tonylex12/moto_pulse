@@ -3,6 +3,7 @@ import { prisma } from '../utils/db';
 import { requireClerkAuth, AuthRequest } from '../middleware/auth';
 import { z } from 'zod';
 import { fetchVehicleSpecs } from '../utils/gemini';
+import { fetchVehicleImage } from '../utils/imageSearch';
 
 const router = Router();
 
@@ -26,6 +27,7 @@ const vehicleSchema = z.object({
   weight: z.string().optional().nullable(),
   seatHeight: z.string().optional().nullable(),
   specSource: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
 });
 
 // GET all vehicles for user
@@ -110,12 +112,24 @@ router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
       data: { isActive: false },
     });
 
-    // Call Gemini utility to search the web for bike specs (non-blocking fallback)
+    // Call utilities to search the web for bike specs and image (non-blocking fallback)
     let specsData = null;
+    let imageUrl = null;
     try {
-      specsData = await fetchVehicleSpecs(brand, model, year);
-    } catch (geminiErr) {
-      console.error('Failed to fetch specs from Gemini (non-blocking):', geminiErr);
+      const [specs, img] = await Promise.all([
+        fetchVehicleSpecs(brand, model, year).catch(err => {
+          console.error('Failed to fetch specs:', err);
+          return null;
+        }),
+        fetchVehicleImage(brand, model, year).catch(err => {
+          console.error('Failed to fetch image:', err);
+          return null;
+        })
+      ]);
+      specsData = specs;
+      imageUrl = img;
+    } catch (err) {
+      console.error('Failed to fetch specs or image (non-blocking):', err);
     }
 
     const vehicle = await prisma.vehicle.create({
@@ -142,6 +156,7 @@ router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
         weight: specsData?.weight || null,
         seatHeight: specsData?.seatHeight || null,
         specSource: specsData ? 'Búsqueda Web' : null,
+        imageUrl: imageUrl || null,
       },
     });
 
@@ -263,14 +278,24 @@ router.post('/:id/fetch-specs', requireClerkAuth, async (req: AuthRequest, res: 
       return res.status(403).json({ error: 'Forbidden: You do not own this vehicle' });
     }
 
-    console.log(`🤖 Triggering specs lookup for existing vehicle: ${vehicle.brand} ${vehicle.model} (${vehicle.year})`);
+    console.log(`🤖 Triggering specs & image lookup for existing vehicle: ${vehicle.brand} ${vehicle.model} (${vehicle.year})`);
 
-    const specsData = await fetchVehicleSpecs(vehicle.brand, vehicle.model, vehicle.year);
+    const [specsData, imgUrl] = await Promise.all([
+      fetchVehicleSpecs(vehicle.brand, vehicle.model, vehicle.year).catch(err => {
+        console.error('Failed to fetch specs:', err);
+        return null;
+      }),
+      fetchVehicleImage(vehicle.brand, vehicle.model, vehicle.year).catch(err => {
+        console.error('Failed to fetch image:', err);
+        return null;
+      })
+    ]);
+
     if (!specsData) {
       return res.status(400).json({ error: 'No se pudieron extraer las especificaciones desde la web. Inténtalo de nuevo.' });
     }
 
-    // Update vehicle with the fetched specs
+    // Update vehicle with the fetched specs and image
     const updatedVehicle = await prisma.vehicle.update({
       where: { id },
       data: {
@@ -288,6 +313,7 @@ router.post('/:id/fetch-specs', requireClerkAuth, async (req: AuthRequest, res: 
         weight: specsData.weight || null,
         seatHeight: specsData.seatHeight || null,
         specSource: 'Búsqueda Web',
+        imageUrl: imgUrl || vehicle.imageUrl || null,
       },
     });
 

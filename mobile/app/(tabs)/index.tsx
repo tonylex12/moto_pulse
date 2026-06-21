@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Keyboard,
   StyleSheet,
+  Image,
 } from "react-native";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useUser, useAuth } from "@clerk/clerk-expo";
@@ -55,6 +56,7 @@ interface Vehicle {
   weight?: string | null;
   seatHeight?: string | null;
   specSource?: string | null;
+  imageUrl?: string | null;
 }
 
 interface AlertData {
@@ -913,6 +915,26 @@ export default function DashboardScreen() {
                   borderColor: theme === "light" ? "#D8E0EB" : "#242D3D",
                 }}
               >
+                {vehicle.imageUrl && !fetchingSpecs && (
+                  <View 
+                    style={{ 
+                      height: 160, 
+                      width: '100%', 
+                      borderRadius: 12, 
+                      overflow: 'hidden', 
+                      marginBottom: 16,
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D'
+                    }}
+                  >
+                    <Image
+                      source={{ uri: vehicle.imageUrl }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                    />
+                  </View>
+                )}
+
                 {fetchingSpecs ? (
                   <View
                     className="py-4 items-center justify-center mb-4"
