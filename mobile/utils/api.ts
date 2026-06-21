@@ -11,9 +11,15 @@ const getDevBaseUrl = () => {
   return 'http://localhost:3000/api';
 };
 
-export const API_URL = __DEV__ 
-  ? getDevBaseUrl() 
-  : 'https://your-production-backend.com/api'; // Replace with Coolify production URL later
+const getSanitizedApiUrl = () => {
+  let url = process.env.EXPO_PUBLIC_API_URL || getDevBaseUrl();
+  if (process.env.EXPO_PUBLIC_API_URL && !url.endsWith('/api') && !url.endsWith('/api/')) {
+    url = url.replace(/\/$/, '') + '/api';
+  }
+  return url;
+};
+
+export const API_URL = getSanitizedApiUrl();
 
 console.log(`🏍️ MotoPulse API URL configured: ${API_URL}`);
 

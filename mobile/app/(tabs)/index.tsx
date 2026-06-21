@@ -26,6 +26,7 @@ import {
   Sun,
   Moon,
   Pencil,
+  Trash2,
 } from "lucide-react-native";
 import { api } from "../../utils/api";
 import { usePushNotifications } from "../../hooks/usePushNotifications";
@@ -448,6 +449,52 @@ export default function DashboardScreen() {
     } catch (e) {
       console.error("Error switching active vehicle:", e);
       showAlert("Error", "No se pudo activar la motocicleta");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteVehicle = (id: string, name: string) => {
+    showAlert(
+      "Eliminar Motocicleta",
+      `¿Estás seguro de que deseas eliminar la motocicleta ${name} de tu garaje? Se borrarán también todos sus registros e historial. Esta acción no se puede deshacer.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        { 
+          text: "Eliminar", 
+          style: "destructive", 
+          onPress: () => performDeleteVehicle(id) 
+        },
+      ],
+      "warning"
+    );
+  };
+
+  const performDeleteVehicle = async (id: string) => {
+    setLoading(true);
+    setIsGarageOpen(false);
+    try {
+      await api.delete(`vehicles/${id}`);
+      
+      const updatedVehicles = vehicles.filter(v => v.id !== id);
+      setVehicles(updatedVehicles);
+
+      if (vehicle?.id === id) {
+        if (updatedVehicles.length > 0) {
+          await api.put(`vehicles/${updatedVehicles[0].id}/active`);
+          await fetchData();
+        } else {
+          setVehicle(null);
+          setIsRegisteringNew(true);
+        }
+      } else {
+        await fetchData();
+      }
+      
+      showAlert("Eliminado", "La motocicleta ha sido eliminada de tu garaje.");
+    } catch (e) {
+      console.error("Error deleting vehicle:", e);
+      showAlert("Error", "No se pudo eliminar la motocicleta.");
     } finally {
       setLoading(false);
     }
@@ -1212,7 +1259,7 @@ export default function DashboardScreen() {
                 }}
               >
                 {/* Brand Picker Dropdown */}
-                <View className="mb-4 relative">
+                <View className="mb-4 relative" style={{ zIndex: 10 }}>
                   <Text
                     className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}
                   >
@@ -1419,16 +1466,18 @@ export default function DashboardScreen() {
               {vehicles.map((item) => {
                 const isActive = item.id === vehicle?.id;
                 return (
-                  <TouchableOpacity
+                  <View
                     key={item.id}
-                    onPress={() => handleSwitchVehicle(item.id)}
                     className={`p-4 rounded-xl border mb-3 flex-row justify-between items-center ${
                       isActive
                         ? `${colors.subCard} ${colors.borderAccent}`
                         : `${colors.card} ${colors.border}`
                     }`}
                   >
-                    <View>
+                    <TouchableOpacity
+                      onPress={() => handleSwitchVehicle(item.id)}
+                      className="flex-1"
+                    >
                       <Text className={`${colors.text} font-bold text-base`}>
                         {item.brand} {item.model}
                       </Text>
@@ -1436,38 +1485,57 @@ export default function DashboardScreen() {
                         Año: {item.year} | Odómetro:{" "}
                         {item.currentMileage.toLocaleString()} km
                       </Text>
-                    </View>
+                    </TouchableOpacity>
+                    
                     <View className="flex-row items-center">
-                      {isActive ? (
-                        <View
-                          className={`${theme === "light" ? "bg-[#1C69D4]/10 border-[#1C69D4]" : "bg-[#00A3E0]/20 border-[#00A3E0]"} border rounded-full px-2.5 py-1 flex-row items-center`}
-                        >
+                      <TouchableOpacity
+                        onPress={() => handleSwitchVehicle(item.id)}
+                        disabled={isActive}
+                      >
+                        {isActive ? (
                           <View
-                            className="w-1.5 h-1.5 rounded-full mr-1.5"
-                            style={{
-                              backgroundColor: activeBmwColor,
-                              shadowColor: activeBmwColor,
-                              shadowOffset: { width: 0, height: 0 },
-                              shadowOpacity: 0.8,
-                              shadowRadius: 6,
-                              elevation: 3,
-                            }}
-                          />
-                          <Text
-                            className={`${theme === "light" ? "text-[#1C69D4]" : "text-[#00A3E0]"} text-xxs font-bold uppercase tracking-wider`}
+                            className={`${theme === "light" ? "bg-[#1C69D4]/10 border-[#1C69D4]" : "bg-[#00A3E0]/20 border-[#00A3E0]"} border rounded-full px-2.5 py-1 flex-row items-center`}
                           >
-                            Activa
+                            <View
+                              className="w-1.5 h-1.5 rounded-full mr-1.5"
+                              style={{
+                                backgroundColor: activeBmwColor,
+                                shadowColor: activeBmwColor,
+                                shadowOffset: { width: 0, height: 0 },
+                                shadowOpacity: 0.8,
+                                shadowRadius: 6,
+                                elevation: 3,
+                              }}
+                            />
+                            <Text
+                              className={`${theme === "light" ? "text-[#1C69D4]" : "text-[#00A3E0]"} text-xxs font-bold uppercase tracking-wider`}
+                            >
+                              Activa
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text
+                            className={`${colors.textAccent} text-xs font-bold uppercase tracking-wider px-2 py-1`}
+                          >
+                            Seleccionar
                           </Text>
-                        </View>
-                      ) : (
-                        <Text
-                          className={`${colors.textMuted} text-xs font-semibold uppercase tracking-wider`}
-                        >
-                          Seleccionar
-                        </Text>
-                      )}
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => handleDeleteVehicle(item.id, `${item.brand} ${item.model}`)}
+                        className="p-2 ml-2"
+                        style={{
+                          backgroundColor: 'rgba(227, 6, 19, 0.06)',
+                          borderRadius: 8,
+                          borderWidth: 0.5,
+                          borderColor: 'rgba(227, 6, 19, 0.2)',
+                        }}
+                      >
+                        <Trash2 size={16} color={colors.bmwRed} />
+                      </TouchableOpacity>
                     </View>
-                  </TouchableOpacity>
+                  </View>
                 );
               })}
             </ScrollView>
