@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity } from 'react-native';
 import { useTheme } from './ThemeContext';
+import { CheckCircle2, AlertTriangle, Info } from 'lucide-react-native';
 
 export interface AlertButton {
   text: string;
@@ -12,10 +13,11 @@ interface AlertConfig {
   title: string;
   message: string;
   buttons?: AlertButton[];
+  type?: 'success' | 'error' | 'warning' | 'info';
 }
 
 interface AlertContextProps {
-  showAlert: (title: string, message: string, buttons?: AlertButton[]) => void;
+  showAlert: (title: string, message: string, buttons?: AlertButton[], type?: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
 const AlertContext = createContext<AlertContextProps | undefined>(undefined);
@@ -33,8 +35,8 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [config, setConfig] = useState<AlertConfig>({ title: '', message: '' });
   const { colors } = useTheme();
 
-  const showAlert = (title: string, message: string, buttons?: AlertButton[]) => {
-    setConfig({ title, message, buttons });
+  const showAlert = (title: string, message: string, buttons?: AlertButton[], type?: 'success' | 'error' | 'warning' | 'info') => {
+    setConfig({ title, message, buttons, type });
     setVisible(true);
   };
 
@@ -80,10 +82,38 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             />
             
             <View className="p-6">
-              {/* Title */}
-              <Text className={`${colors.text} font-orbitron text-base font-bold tracking-wider mb-3 uppercase`}>
-                {config.title}
-              </Text>
+              {/* Title with Icon */}
+              {(() => {
+                const alertType = config.type || (
+                  /exito|exitoso|confirm|hecho|registrado|guardado|actualizado|creada|iniciada|encendido|check/i.test(config.title) ? 'success' :
+                  /error|fallo|incorrecto|invalido/i.test(config.title) ? 'error' :
+                  /advertencia|alerta|cuidado|aviso/i.test(config.title) ? 'warning' : 'info'
+                );
+
+                let iconComponent = null;
+                if (alertType === 'success') {
+                  iconComponent = <CheckCircle2 size={20} color={colors.statusGreen} />;
+                } else if (alertType === 'error') {
+                  iconComponent = <AlertTriangle size={20} color={colors.bmwRed} />;
+                } else if (alertType === 'warning') {
+                  iconComponent = <AlertTriangle size={20} color={colors.isDark ? '#FF6B00' : '#E65100'} />;
+                } else if (alertType === 'info') {
+                  iconComponent = <Info size={20} color={colors.bmwBlue} />;
+                }
+
+                return (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                    {iconComponent && (
+                      <View style={{ marginRight: 8 }}>
+                        {iconComponent}
+                      </View>
+                    )}
+                    <Text className={`${colors.text} font-orbitron text-base font-bold tracking-wider uppercase flex-1`}>
+                      {config.title}
+                    </Text>
+                  </View>
+                );
+              })()}
               
               {/* Message */}
               <Text className={`${colors.textSec} text-sm leading-relaxed mb-6 font-medium`}>

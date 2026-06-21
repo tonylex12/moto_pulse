@@ -1,21 +1,26 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { useTheme } from '../../utils/ThemeContext';
+import { Wrench } from 'lucide-react-native';
 
 interface TachometerGaugeProps {
   label: string;
   value: number; // current mileage / days
   target: number; // trigger mileage / days
+  lastPerformedValue?: string | null;
   type: 'MILEAGE' | 'DATE';
   unit?: string;
+  onPress?: () => void;
 }
 
 export const TachometerGauge: React.FC<TachometerGaugeProps> = ({
   label,
   value,
   target,
+  lastPerformedValue,
   type,
   unit = 'km',
+  onPress,
 }) => {
   const { colors, theme } = useTheme();
 
@@ -25,15 +30,36 @@ export const TachometerGauge: React.FC<TachometerGaugeProps> = ({
 
   if (type === 'MILEAGE') {
     remaining = Math.max(0, target - value);
-    percentageRemaining = target > 0 ? (remaining / target) * 100 : 0;
+    if (lastPerformedValue) {
+      const lastVal = parseInt(lastPerformedValue);
+      const interval = target - lastVal;
+      if (interval > 0) {
+        percentageRemaining = (remaining / interval) * 100;
+      } else {
+        percentageRemaining = target > 0 ? (remaining / target) * 100 : 0;
+      }
+    } else {
+      percentageRemaining = target > 0 ? (remaining / target) * 100 : 0;
+    }
   } else {
     // Date-based
     const today = new Date().getTime();
     const targetTime = new Date(target).getTime();
     remaining = Math.max(0, Math.ceil((targetTime - today) / (1000 * 60 * 60 * 24)));
-    // Assume max alert period is 365 days for percentage calculation
-    percentageRemaining = Math.min(100, (remaining / 365) * 100);
+    if (lastPerformedValue) {
+      const lastTime = new Date(lastPerformedValue).getTime();
+      const intervalDays = Math.ceil((targetTime - lastTime) / (1000 * 60 * 60 * 24));
+      if (intervalDays > 0) {
+        percentageRemaining = (remaining / intervalDays) * 100;
+      } else {
+        percentageRemaining = Math.min(100, (remaining / 365) * 100);
+      }
+    } else {
+      // Assume max alert period is 365 days for percentage calculation
+      percentageRemaining = Math.min(100, (remaining / 365) * 100);
+    }
   }
+  percentageRemaining = Math.max(0, Math.min(100, percentageRemaining));
 
   // Determine LED status colors
   let statusText = 'OK';
@@ -60,13 +86,35 @@ export const TachometerGauge: React.FC<TachometerGaugeProps> = ({
       }}
     >
       <View className="flex-row justify-between items-center mb-2">
-        <Text className={`font-medium text-base tracking-wide ${colors.text}`}>{label}</Text>
-        <Text 
-          className="text-xs uppercase tracking-widest font-bold"
-          style={{ color: statusColor }}
-        >
-          {statusText}
-        </Text>
+        <Text className={`font-rajdhani-bold text-base font-bold uppercase tracking-[1.5px] ${colors.text}`}>{label}</Text>
+        <View className="flex-row items-center">
+          <Text 
+            className="font-rajdhani-bold text-xs uppercase tracking-[2px] font-bold"
+            style={{ color: statusColor, marginRight: onPress ? 6 : 0 }}
+          >
+            {statusText}
+          </Text>
+          {onPress && (
+            <TouchableOpacity 
+              onPress={onPress}
+              style={{
+                backgroundColor: 'rgba(28, 105, 212, 0.08)',
+                borderWidth: 1,
+                borderColor: 'rgba(28, 105, 212, 0.25)',
+                borderRadius: 6,
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+            >
+              <Wrench size={10} color="#1C69D4" style={{ marginRight: 4 }} />
+              <Text className="font-rajdhani-bold text-[10px] text-[#1C69D4] font-bold uppercase tracking-wider">
+                Registrar
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* LED Rev-counter segments */}
@@ -95,19 +143,19 @@ export const TachometerGauge: React.FC<TachometerGaugeProps> = ({
       </View>
 
       {/* Stats display */}
-      <View className="flex-row justify-between items-baseline">
-        <Text className={`${colors.textSec} text-xs`}>
+      <View className="flex-row justify-between items-baseline mb-1">
+        <Text className={`font-barlow-condensed text-xs ${colors.textSec}`}>
           Restante:{' '}
-          <Text className={`font-orbitron font-semibold text-sm ${colors.text}`}>
+          <Text className={`font-rajdhani-bold text-base font-bold ${colors.text}`}>
             {type === 'MILEAGE' 
               ? `${remaining.toLocaleString()} ${unit}` 
               : `${remaining} ${remaining === 1 ? 'día' : 'días'}`
             }
           </Text>
         </Text>
-        <Text className={`${colors.textSec} text-xs`}>
+        <Text className={`font-barlow-condensed text-xs ${colors.textSec}`}>
           Límite:{' '}
-          <Text className={`font-orbitron text-sm ${colors.textSec}`}>
+          <Text className={`font-rajdhani-bold text-base font-bold ${colors.text}`}>
             {type === 'MILEAGE'
               ? `${target.toLocaleString()} ${unit}`
               : new Date(target).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
@@ -115,6 +163,21 @@ export const TachometerGauge: React.FC<TachometerGaugeProps> = ({
           </Text>
         </Text>
       </View>
+
+      {/* Last performed sub-info */}
+      {lastPerformedValue && (
+        <View className="flex-row justify-between items-center border-t border-dashed pt-1.5 mt-1" style={{ borderColor: theme === 'light' ? '#E2E8F0' : '#2D3748' }}>
+          <Text className={`font-barlow-condensed-bold text-[10px] uppercase tracking-wider ${colors.textMuted}`}>
+            Último realizado:
+          </Text>
+          <Text className={`font-rajdhani-semibold text-sm font-semibold ${colors.textSec}`}>
+            {type === 'MILEAGE'
+              ? `${parseInt(lastPerformedValue).toLocaleString()} ${unit}`
+              : new Date(lastPerformedValue).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+            }
+          </Text>
+        </View>
+      )}
     </View>
   );
 };

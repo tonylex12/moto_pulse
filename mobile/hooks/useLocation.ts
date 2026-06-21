@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { Alert } from 'react-native';
 import * as Location from 'expo-location';
 
 export interface Coordinate {
@@ -28,6 +29,7 @@ export const useLocation = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedRoute, setRecordedRoute] = useState<Coordinate[]>([]);
   const [totalDistance, setTotalDistance] = useState(0); // In kilometers
+  const [speed, setSpeed] = useState(0); // In km/h
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
@@ -38,16 +40,33 @@ export const useLocation = () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setErrorMsg('Location permission denied');
+        Alert.alert(
+          'Permiso de Ubicación Requerido',
+          'MotoPulse necesita acceso a tu ubicación para rastrear tus rutas y telemetría en tiempo real. Por favor habilítalo en la configuración de tu dispositivo.'
+        );
         return false;
       }
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      setCurrentLocation({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-      return true;
+
+      let loc = null;
+      try {
+        loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+      } catch (err) {
+        console.warn('getCurrentPositionAsync failed, trying getLastKnownPositionAsync:', err);
+        loc = await Location.getLastKnownPositionAsync();
+      }
+
+      if (loc) {
+        setCurrentLocation({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
+        return true;
+      } else {
+        setErrorMsg('Could not retrieve location');
+        return false;
+      }
     } catch (e) {
       setErrorMsg('Error requesting permissions or fetching position');
       console.error(e);
@@ -72,6 +91,7 @@ export const useLocation = () => {
     setIsRecording(true);
     setRecordedRoute([]);
     setTotalDistance(0);
+    setSpeed(0);
     setErrorMsg(null);
 
     // Watch location changes
@@ -88,6 +108,13 @@ export const useLocation = () => {
         };
 
         setCurrentLocation(newCoord);
+        
+        // Expose speed: convert meters/second to km/h (speed * 3.6)
+        const gpsSpeed = location.coords.speed;
+        const speedKmh = gpsSpeed !== null && gpsSpeed !== undefined
+          ? Math.max(0, Math.round(gpsSpeed * 3.6))
+          : 0;
+        setSpeed(speedKmh);
         
         setRecordedRoute((prevRoute) => {
           if (prevRoute.length === 0) {
@@ -114,11 +141,13 @@ export const useLocation = () => {
       locationSubscription.current = null;
     }
     setIsRecording(false);
+    setSpeed(0);
   };
 
   const clearRecordedRoute = () => {
     setRecordedRoute([]);
     setTotalDistance(0);
+    setSpeed(0);
   };
 
   return {
@@ -126,6 +155,7 @@ export const useLocation = () => {
     isRecording,
     recordedRoute,
     totalDistance: parseFloat(totalDistance.toFixed(2)),
+    speed,
     errorMsg,
     startRecording,
     stopRecording,

@@ -22,7 +22,7 @@ const routeSchema = z.object({
 // GET all saved routes for user
 router.get('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
     const routes = await prisma.savedRoute.findMany({
@@ -40,7 +40,7 @@ router.get('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
 // POST save a route
 router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
     const parsed = routeSchema.safeParse(req.body);
@@ -75,7 +75,7 @@ router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
 // DELETE a saved route
 router.delete('/:id', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     const { id } = req.params;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 

@@ -13,53 +13,130 @@ import {
   Barlow_600SemiBold,
   Barlow_700Bold
 } from '@expo-google-fonts/barlow';
+import {
+  BarlowCondensed_400Regular,
+  BarlowCondensed_600SemiBold,
+  BarlowCondensed_700Bold
+} from '@expo-google-fonts/barlow-condensed';
+import {
+  Rajdhani_400Regular,
+  Rajdhani_500Medium,
+  Rajdhani_600SemiBold,
+  Rajdhani_700Bold
+} from '@expo-google-fonts/rajdhani';
 import { 
   Inter_400Regular, 
   Inter_600SemiBold, 
   Inter_700Bold 
 } from '@expo-google-fonts/inter';
-import { View, ActivityIndicator, Text, TextInput, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, Text, TextInput, StyleSheet, Platform } from 'react-native';
 
 const patchTextComponent = (Component: any, defaultFont: string) => {
   if (!Component) return;
 
   const patchStyle = (style: any) => {
-    const flatStyle = StyleSheet.flatten(style);
+    // Flatten style first to ensure we work with a single object and never return an array
+    const flatStyle = StyleSheet.flatten(style) || {};
     
-    // Check if custom font is already defined
-    const hasCustomFont = flatStyle?.fontFamily && 
-      flatStyle.fontFamily !== 'System' && 
-      flatStyle.fontFamily !== 'Orbitron' &&
-      flatStyle.fontFamily !== 'Orbitron-SemiBold' &&
-      flatStyle.fontFamily !== 'Orbitron-Bold';
+    // Remove any numeric/array properties that might have leaked from Object.assign or string mapping
+    const cleanStyle = { ...flatStyle };
+    Object.keys(cleanStyle).forEach(key => {
+      if (/^\d+$/.test(key)) {
+        delete cleanStyle[key];
+      }
+    });
 
-    if (hasCustomFont) {
-      return style;
-    }
+    const font = cleanStyle?.fontFamily;
+    const weight = cleanStyle?.fontWeight;
+    const isBold = weight === 'bold' || weight === '700' || weight === '800' || weight === '900';
+    const isSemi = weight === '500' || weight === '600';
 
-    const weight = flatStyle?.fontWeight;
     let targetFont = defaultFont;
-    if (weight === 'bold' || weight === '700' || weight === '800' || weight === '900') {
-      targetFont = 'Orbitron-Bold';
-    } else if (weight === '500' || weight === '600') {
-      targetFont = 'Orbitron-SemiBold';
+    if (font) {
+      const baseFonts = ['Orbitron', 'Barlow', 'BarlowCondensed', 'Rajdhani', 'Inter'];
+      const isResolved = baseFonts.some(bf => font.startsWith(bf + '-'));
+      if (isResolved) {
+        targetFont = font;
+      } else if (baseFonts.includes(font)) {
+        let resolved = font;
+        if (isBold) {
+          resolved = `${font}-Bold`;
+        } else if (isSemi) {
+          resolved = `${font}-SemiBold`;
+        } else if (font === 'Rajdhani') {
+          resolved = 'Rajdhani-Medium';
+        }
+        targetFont = resolved;
+      } else {
+        targetFont = font;
+      }
+    } else {
+      if (isBold) {
+        targetFont = `${defaultFont}-Bold`;
+      } else if (isSemi) {
+        targetFont = `${defaultFont}-SemiBold`;
+      }
     }
 
-    return [{ fontFamily: targetFont }, style];
+    return { ...cleanStyle, fontFamily: targetFont };
   };
 
   // If component has a direct render function (e.g. forwardRef)
   if (Component.render) {
     const oldRender = Component.render;
-    Component.render = function (...args: any[]) {
-      const origin = oldRender.apply(this, args);
-      if (!origin) return origin;
-      return React.cloneElement(origin, {
-        style: patchStyle(origin.props.style),
-      });
+    Component.render = function (props: any, ref: any) {
+      if (!props) return oldRender.call(this, props, ref);
+
+      // Determine font family based on props.style
+      const style = props.style;
+      const flatStyle = StyleSheet.flatten(style) || {};
+      const font = flatStyle?.fontFamily;
+      const weight = flatStyle?.fontWeight;
+      const isBold = weight === 'bold' || weight === '700' || weight === '800' || weight === '900';
+      const isSemi = weight === '500' || weight === '600';
+
+      let targetFont = defaultFont;
+      if (font) {
+        const baseFonts = ['Orbitron', 'Barlow', 'BarlowCondensed', 'Rajdhani', 'Inter'];
+        const isResolved = baseFonts.some(bf => font.startsWith(bf + '-'));
+        if (isResolved) {
+          targetFont = font;
+        } else if (baseFonts.includes(font)) {
+          let resolved = font;
+          if (isBold) {
+            resolved = `${font}-Bold`;
+          } else if (isSemi) {
+            resolved = `${font}-SemiBold`;
+          } else if (font === 'Rajdhani') {
+            resolved = 'Rajdhani-Medium';
+          }
+          targetFont = resolved;
+        } else {
+          targetFont = font;
+        }
+      } else {
+        if (isBold) {
+          targetFont = `${defaultFont}-Bold`;
+        } else if (isSemi) {
+          targetFont = `${defaultFont}-SemiBold`;
+        }
+      }
+
+      // Merge the font family safely by appending it to the style array
+      let patchedStyle;
+      if (Array.isArray(style)) {
+        patchedStyle = [...style, { fontFamily: targetFont }];
+      } else if (style) {
+        patchedStyle = [style, { fontFamily: targetFont }];
+      } else {
+        patchedStyle = { fontFamily: targetFont };
+      }
+
+      // Call oldRender with patched props
+      return oldRender.call(this, { ...props, style: patchedStyle }, ref);
     };
   } else if (Component.prototype && Component.prototype.render) {
-    // If it is a class component
+    // If it is a class component, fallback to style patching on output
     const oldPrototypeRender = Component.prototype.render;
     Component.prototype.render = function (...args: any[]) {
       const origin = oldPrototypeRender.apply(this, args);
@@ -71,8 +148,8 @@ const patchTextComponent = (Component: any, defaultFont: string) => {
   }
 };
 
-patchTextComponent(Text, 'Orbitron');
-patchTextComponent(TextInput, 'Orbitron');
+patchTextComponent(Text, 'Barlow');
+patchTextComponent(TextInput, 'Barlow');
 
 import { tokenCache } from '../utils/tokenCache';
 import { setAuthToken, setTokenResolver, api } from '../utils/api';
@@ -109,6 +186,13 @@ function InitialLayout() {
     'Barlow': Barlow_400Regular,
     'Barlow-SemiBold': Barlow_600SemiBold,
     'Barlow-Bold': Barlow_700Bold,
+    'BarlowCondensed': BarlowCondensed_400Regular,
+    'BarlowCondensed-SemiBold': BarlowCondensed_600SemiBold,
+    'BarlowCondensed-Bold': BarlowCondensed_700Bold,
+    'Rajdhani': Rajdhani_400Regular,
+    'Rajdhani-Medium': Rajdhani_500Medium,
+    'Rajdhani-SemiBold': Rajdhani_600SemiBold,
+    'Rajdhani-Bold': Rajdhani_700Bold,
     'Inter': Inter_400Regular,
     'Inter-SemiBold': Inter_600SemiBold,
     'Inter-Bold': Inter_700Bold,
@@ -181,7 +265,7 @@ function InitialLayout() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <ClerkProvider publishableKey={EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
+      <ClerkProvider publishableKey={EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY} tokenCache={Platform.OS === 'web' ? undefined : tokenCache}>
         <ClerkLoaded>
           <ThemeProvider>
             <AlertProvider>

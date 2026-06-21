@@ -11,12 +11,27 @@ const vehicleSchema = z.object({
   model: z.string().min(1, 'Model is required'),
   year: z.number().int().min(1900).max(new Date().getFullYear() + 2),
   currentMileage: z.number().int().nonnegative('Mileage must be non-negative'),
+  // Specifications fields
+  tankSize: z.string().optional().nullable(),
+  frontBrake: z.string().optional().nullable(),
+  rearBrake: z.string().optional().nullable(),
+  frontSuspension: z.string().optional().nullable(),
+  rearSuspension: z.string().optional().nullable(),
+  frontTire: z.string().optional().nullable(),
+  rearTire: z.string().optional().nullable(),
+  engineCc: z.string().optional().nullable(),
+  power: z.string().optional().nullable(),
+  torque: z.string().optional().nullable(),
+  transmission: z.string().optional().nullable(),
+  weight: z.string().optional().nullable(),
+  seatHeight: z.string().optional().nullable(),
+  specSource: z.string().optional().nullable(),
 });
 
 // GET all vehicles for user
 router.get('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
     let vehicles = await prisma.vehicle.findMany({
@@ -44,7 +59,7 @@ router.get('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
 // GET single vehicle
 router.get('/:id', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     const { id } = req.params;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -70,7 +85,7 @@ router.get('/:id', requireClerkAuth, async (req: AuthRequest, res: Response) => 
 // POST create vehicle
 router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
     const parsed = vehicleSchema.safeParse(req.body);
@@ -140,7 +155,7 @@ router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
 // PUT update vehicle
 router.put('/:id', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     const { id } = req.params;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -174,7 +189,7 @@ router.put('/:id', requireClerkAuth, async (req: AuthRequest, res: Response) => 
 // DELETE vehicle
 router.delete('/:id', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     const { id } = req.params;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -198,7 +213,7 @@ router.delete('/:id', requireClerkAuth, async (req: AuthRequest, res: Response) 
 // PUT set active vehicle
 router.put('/:id/active', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     const { id } = req.params;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -234,7 +249,7 @@ router.put('/:id/active', requireClerkAuth, async (req: AuthRequest, res: Respon
 // POST fetch specifications using Gemini for an existing vehicle
 router.post('/:id/fetch-specs', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     const { id } = req.params;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 

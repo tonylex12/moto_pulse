@@ -9,17 +9,18 @@ const expo = new Expo();
 
 const alertSchema = z.object({
   vehicleId: z.string().uuid(),
-  type: z.enum(['OIL_CHANGE', 'BRAKE_PADS', 'INSURANCE_RENEWAL', 'CUSTOM']),
+  type: z.enum(['OIL_CHANGE', 'BRAKE_PADS', 'INSURANCE_RENEWAL', 'PREVENTIVE_MAINTENANCE', 'CUSTOM']),
   title: z.string().min(1, 'Title is required'),
   triggerType: z.enum(['MILEAGE', 'DATE']),
   triggerValue: z.string().min(1, 'Trigger value is required'),
+  lastPerformedValue: z.string().nullable().optional(),
   isCompleted: z.boolean().optional(),
 });
 
 // GET alerts for a vehicle
 router.get('/vehicle/:vehicleId', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     const { vehicleId } = req.params;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -46,7 +47,7 @@ router.get('/vehicle/:vehicleId', requireClerkAuth, async (req: AuthRequest, res
 // POST create alert
 router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
     const parsed = alertSchema.safeParse(req.body);
@@ -54,7 +55,7 @@ router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: parsed.error.errors[0].message });
     }
 
-    const { vehicleId, type, title, triggerType, triggerValue } = parsed.data;
+    const { vehicleId, type, title, triggerType, triggerValue, lastPerformedValue } = parsed.data;
 
     // Validate vehicle ownership
     const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
@@ -81,6 +82,7 @@ router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
         title,
         triggerType,
         triggerValue,
+        lastPerformedValue: lastPerformedValue || null,
         isCompleted: false,
       },
     });
@@ -95,7 +97,7 @@ router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
 // PUT update alert (e.g. mark as completed)
 router.put('/:id', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     const { id } = req.params;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -128,7 +130,7 @@ router.put('/:id', requireClerkAuth, async (req: AuthRequest, res: Response) => 
 // DELETE alert
 router.delete('/:id', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     const { id } = req.params;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 

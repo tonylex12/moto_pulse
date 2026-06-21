@@ -1,14 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { requireAuth } from '@clerk/express';
 
-// Define a custom interface for authenticated requests
 export interface AuthRequest extends Request {
-  auth?: {
-    userId: string;
-    sessionId?: string;
-    actor?: any;
-    claims?: any;
-  };
+  auth?: any;
 }
 
 // Wrapper middleware to require authentication via Clerk

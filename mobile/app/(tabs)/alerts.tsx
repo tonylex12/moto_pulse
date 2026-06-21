@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Modal, RefreshControl, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Plus, Bell, Calendar, Activity, Check, Trash2, X, ChevronDown, CheckCircle2 } from 'lucide-react-native';
 import { api } from '../../utils/api';
 import { useAlert } from '../../utils/AlertContext';
@@ -16,24 +17,63 @@ interface Vehicle {
 
 interface AlertData {
   id: string;
-  type: 'OIL_CHANGE' | 'BRAKE_PADS' | 'INSURANCE_RENEWAL' | 'CUSTOM';
+  type: 'OIL_CHANGE' | 'BRAKE_PADS' | 'INSURANCE_RENEWAL' | 'PREVENTIVE_MAINTENANCE' | 'CUSTOM';
   title: string;
   triggerType: 'MILEAGE' | 'DATE';
   triggerValue: string;
   isCompleted: boolean;
+  lastPerformedValue?: string | null;
 }
 
 const ALERT_TYPES = [
   { label: 'Cambio de Aceite', value: 'OIL_CHANGE' },
+  { label: 'Mantenimiento Preventivo', value: 'PREVENTIVE_MAINTENANCE' },
   { label: 'Pastillas de Freno', value: 'BRAKE_PADS' },
   { label: 'Seguros / Trámites', value: 'INSURANCE_RENEWAL' },
   { label: 'Personalizado', value: 'CUSTOM' },
 ];
 
+const parseIsoDate = (dateStr: string) => {
+  if (!dateStr) return new Date();
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1;
+    const day = parseInt(parts[2]);
+    return new Date(year, month, day);
+  }
+  const parsed = Date.parse(dateStr);
+  return isNaN(parsed) ? new Date() : new Date(parsed);
+};
+
+const formatIsoDate = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 export default function AlertsScreen() {
   const { showAlert } = useAlert();
   const { theme, colors } = useTheme();
   const activeBmwColor = theme === 'light' ? colors.bmwBlue : colors.bmwLightBlue;
+
+  const tftStyles = {
+    bezelBg: theme === "light" ? "#FFFFFF" : "#0F1216",
+    bezelBorder: theme === "light" ? "#D8E0EB" : "#242D3D",
+    screenBg: theme === "light" ? "#EBF0F5" : "#050709",
+    screenBorder: theme === "light" ? "#D8E0EB" : "#171B22",
+    headerBorder: theme === "light" ? "#D8E0EB" : "rgba(255,255,255,0.08)",
+    headerText: theme === "light" ? "#1C69D4" : "#00A3E0",
+    timeText: theme === "light" ? "#4E5E72" : "#8E9FBC",
+    textMain: theme === "light" ? "#002C5B" : "#FFFFFF",
+    textSec: theme === "light" ? "#4E5E72" : "#A0AEC0",
+    cardBg: theme === "light" ? "#FFFFFF" : "#121620",
+    cardBorder: theme === "light" ? "#D8E0EB" : "#242D3D",
+    // Accent colors
+    accentBlue: theme === "light" ? "#1C69D4" : "#00E5FF",
+    accentRed: colors.bmwRed,
+  };
 
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [alerts, setAlerts] = useState<AlertData[]>([]);
@@ -42,25 +82,29 @@ export default function AlertsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
 
   // Form states
-  const [type, setType] = useState<'OIL_CHANGE' | 'BRAKE_PADS' | 'INSURANCE_RENEWAL' | 'CUSTOM'>('OIL_CHANGE');
+  const [type, setType] = useState<'OIL_CHANGE' | 'BRAKE_PADS' | 'INSURANCE_RENEWAL' | 'PREVENTIVE_MAINTENANCE' | 'CUSTOM'>('OIL_CHANGE');
   const [typeLabel, setTypeLabel] = useState('Cambio de Aceite');
   const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [triggerType, setTriggerType] = useState<'MILEAGE' | 'DATE'>('MILEAGE');
   const [triggerValue, setTriggerValue] = useState('');
+  const [lastPerformedValue, setLastPerformedValue] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showLastPerformedDatePicker, setShowLastPerformedDatePicker] = useState(false);
+  const [showTriggerDatePicker, setShowTriggerDatePicker] = useState(false);
+
+  // Edit/Resolve states
+  const [editingAlertId, setEditingAlertId] = useState<string | null>(null);
+  const [modalMode, setModalMode] = useState<'CREATE' | 'RESOLVE'>('CREATE');
 
   const loadData = async () => {
     try {
-      // Changed to relative path without leading slash
       const response = await api.get('vehicles');
       const list = response.data || [];
       if (list.length > 0) {
-        // Find the active vehicle dynamically
         const activeVehicle = list.find((v: any) => v.isActive) || list[0];
         setVehicle(activeVehicle);
 
-        // Fetch alerts (relative path)
         const alertsResponse = await api.get(`alerts/vehicle/${activeVehicle.id}`);
         setAlerts(alertsResponse.data);
       } else {
@@ -84,55 +128,70 @@ export default function AlertsScreen() {
     loadData();
   };
 
-  const handleCreateAlert = async () => {
+  const handleSaveAlert = async () => {
     if (!vehicle) return;
-    if (!title.trim() || !triggerValue) {
-      showAlert('Error', 'Por favor completa todos los campos del recordatorio');
+    if (!triggerValue || !lastPerformedValue) {
+      showAlert('Error', 'Por favor completa todos los campos');
       return;
     }
 
-    // Input validation
     if (triggerType === 'MILEAGE') {
       const mileageVal = parseInt(triggerValue);
-      if (isNaN(mileageVal) || mileageVal <= 0) {
-        showAlert('Error', 'El odómetro objetivo debe ser un número positivo');
+      const lastVal = parseInt(lastPerformedValue);
+      if (isNaN(mileageVal) || mileageVal <= 0 || isNaN(lastVal) || lastVal < 0) {
+        showAlert('Error', 'Los valores del odómetro deben ser números positivos');
         return;
       }
-      if (mileageVal <= vehicle.currentMileage) {
-        showAlert('Advertencia', 'El kilometraje objetivo ya se ha superado en tu odómetro actual');
+      if (mileageVal <= lastVal) {
+        showAlert('Error', 'El odómetro objetivo debe ser mayor que el del último mantenimiento');
+        return;
       }
     } else {
       const dateVal = Date.parse(triggerValue);
-      if (isNaN(dateVal)) {
-        showAlert('Error', 'Ingresa una fecha de expiración válida (Formato YYYY-MM-DD)');
+      const lastDateVal = Date.parse(lastPerformedValue);
+      if (isNaN(dateVal) || isNaN(lastDateVal)) {
+        showAlert('Error', 'Ingresa fechas válidas (Formato YYYY-MM-DD)');
+        return;
+      }
+      if (dateVal <= lastDateVal) {
+        showAlert('Error', 'La fecha de expiración debe ser posterior a la del último mantenimiento');
         return;
       }
     }
 
     setSaving(true);
     try {
-      const payload = {
-        vehicleId: vehicle.id,
-        type,
-        title: title.trim(),
-        triggerType,
-        triggerValue,
-      };
-
-      // Changed to relative paths without leading slash
-      await api.post('alerts', payload);
-      showAlert('Alerta Creada', 'El recordatorio de mantenimiento se ha configurado.');
+      if (modalMode === 'CREATE') {
+        const payload = {
+          vehicleId: vehicle.id,
+          type,
+          title: title.trim(),
+          triggerType,
+          triggerValue,
+          lastPerformedValue,
+        };
+        await api.post('alerts', payload);
+        showAlert('Alerta Creada', 'El recordatorio de mantenimiento se ha configurado.');
+      } else {
+        const payload = {
+          lastPerformedValue,
+          triggerValue,
+          isCompleted: false,
+        };
+        await api.put(`alerts/${editingAlertId}`, payload);
+        showAlert('Mantenimiento Registrado', 'Se ha actualizado el ciclo del recordatorio.');
+      }
       
-      // Reset form & close
       setTitle('');
       setTriggerValue('');
+      setLastPerformedValue('');
+      setEditingAlertId(null);
       setModalVisible(false);
       
-      // Refresh
       loadData();
     } catch (e: any) {
       console.error(e);
-      showAlert('Error', e.response?.data?.error || 'No se pudo configurar la alerta');
+      showAlert('Error', e.response?.data?.error || 'No se pudo guardar la alerta');
     } finally {
       setSaving(false);
     }
@@ -148,7 +207,6 @@ export default function AlertsScreen() {
           text: 'Resolver',
           onPress: async () => {
             try {
-              // Changed to relative path
               await api.put(`alerts/${alertId}`, { isCompleted: true });
               loadData();
             } catch (e) {
@@ -172,7 +230,6 @@ export default function AlertsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Changed to relative path
               await api.delete(`alerts/${alertId}`);
               loadData();
             } catch (e) {
@@ -197,159 +254,323 @@ export default function AlertsScreen() {
     <SafeAreaView className={`flex-1 ${colors.bg}`}>
       {/* Header */}
       <View
-        className="flex-row justify-between items-center px-6 py-4"
         style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingHorizontal: 24,
+          paddingVertical: 16,
           borderBottomWidth: 1,
           borderBottomColor: theme === "light" ? "#D8E0EB" : "#242D3D",
         }}
       >
-        <Text className={`font-orbitron text-lg font-bold tracking-wider uppercase ${colors.text}`}>
+        <Text style={{ flex: 1, fontFamily: 'Rajdhani-Bold', fontSize: 18, color: tftStyles.textMain, letterSpacing: 2, textTransform: 'uppercase', marginRight: 16 }}>
           ALERTAS DE MANTENIMIENTO
         </Text>
         {vehicle && (
           <TouchableOpacity
-            onPress={() => setModalVisible(true)}
-            className="flex-row items-center bg-[#1C69D4] rounded-lg px-3 py-1.5 border border-[#1C69D4]"
+            onPress={() => {
+              setModalMode('CREATE');
+              setTitle('Cambio de Aceite');
+              setType('OIL_CHANGE');
+              setTypeLabel('Cambio de Aceite');
+              setTriggerType('MILEAGE');
+              setLastPerformedValue(vehicle.currentMileage.toString());
+              setTriggerValue((vehicle.currentMileage + 3000).toString());
+              setModalVisible(true);
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#1C69D4',
+              borderRadius: 20,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderWidth: 1,
+              borderColor: '#1C69D4',
+            }}
           >
-            <Plus size={16} color="#FFFFFF" />
-            <Text className="text-white font-bold text-xs uppercase tracking-wider ml-1">
-              ALERTAS
+            <Plus size={14} color="#FFFFFF" />
+            <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 11, color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: 1, marginLeft: 4 }}>
+              + ALERTA
             </Text>
           </TouchableOpacity>
         )}
       </View>
 
       {!vehicle ? (
-        <View className="flex-grow justify-center items-center p-6">
-          <Bell size={48} color={colors.bmwRed} />
-          <Text className={`text-center font-orbitron text-base font-bold mt-4 uppercase ${colors.text}`}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Bell size={48} color={colors.bmwRed} style={{ marginBottom: 16 }} />
+          <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 16, color: tftStyles.textMain, textTransform: 'uppercase', letterSpacing: 1.5 }}>
             REGISTRA TU MOTO PRIMERO
           </Text>
-          <Text className={`${colors.textSec} text-center text-xs mt-1`}>
+          <Text style={{ fontFamily: 'BarlowCondensed-Medium', fontSize: 12, color: tftStyles.textSec, textAlign: 'center', marginTop: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             Debes registrar una moto en el Panel principal antes de configurar alertas de mantenimiento.
           </Text>
         </View>
       ) : (
         <ScrollView
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          className="flex-grow p-6"
+          contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+          style={{ flex: 1 }}
         >
-          {/* Active Alerts Timeline */}
-          <Text className={`${colors.textSec} font-bold text-xs uppercase tracking-widest mb-4`}>
+          {/* Section Title */}
+          <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 12, color: tftStyles.textSec, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>
             ALERTAS PROGRAMADAS
           </Text>
 
           {alerts.length > 0 ? (
             alerts.map((alert) => {
-              // Calculate status
-              let statusBorder = `border-${theme === 'light' ? 'neutral-200' : 'tarmac-light'}`;
-              let badgeColor = theme === 'light' ? 'bg-neutral-200 text-neutral-600' : 'bg-neutral-800 text-neutral-400';
+              let accentColor = theme === 'light' ? '#CBD5E0' : '#242D3D';
               let triggerDesc = '';
+              let isWarning = false;
+              let isCritical = false;
 
               if (alert.isCompleted) {
-                statusBorder = `border-${theme === 'light' ? 'neutral-300' : 'neutral-800'} opacity-60`;
-                badgeColor = theme === 'light' ? 'bg-neutral-100 text-neutral-400' : 'bg-neutral-900 text-neutral-500';
+                accentColor = theme === 'light' ? '#CBD5E0' : '#242D3D';
               } else if (alert.triggerType === 'MILEAGE') {
                 const targetOdo = parseInt(alert.triggerValue);
                 const remaining = targetOdo - vehicle.currentMileage;
                 if (remaining <= 0) {
-                  statusBorder = 'border-l-4 border-l-[#E30613]';
-                  badgeColor = 'bg-[#E30613]/15 text-[#E30613]';
+                  accentColor = '#E30613';
+                  isCritical = true;
                 } else if (remaining <= 500) {
-                  statusBorder = 'border-l-4 border-l-[#FF9E00]';
-                  badgeColor = 'bg-[#FF9E00]/15 text-[#FF9E00]';
+                  accentColor = '#FF9E00';
+                  isWarning = true;
                 } else {
-                  statusBorder = `border-l-4 ${theme === 'light' ? 'border-l-[#008A22]' : 'border-l-[#2CFF0A]'}`;
-                  badgeColor = theme === 'light' ? 'bg-[#008A22]/10 text-[#008A22]' : 'bg-[#2CFF0A]/20 text-[#2CFF0A]';
+                  accentColor = theme === 'light' ? '#008A22' : '#2CFF0A';
                 }
-                triggerDesc = `A los ${targetOdo.toLocaleString()} km`;
+                triggerDesc = `A LOS ${targetOdo.toLocaleString()} KM`;
               } else {
-                // Date trigger
                 const today = new Date().getTime();
                 const targetTime = new Date(alert.triggerValue).getTime();
                 const daysLeft = Math.ceil((targetTime - today) / (1000 * 60 * 60 * 24));
                 
                 if (daysLeft <= 0) {
-                  statusBorder = 'border-l-4 border-l-[#E30613]';
-                  badgeColor = 'bg-[#E30613]/15 text-[#E30613]';
+                  accentColor = '#E30613';
+                  isCritical = true;
                 } else if (daysLeft <= 7) {
-                  statusBorder = 'border-l-4 border-l-[#FF9E00]';
-                  badgeColor = 'bg-[#FF9E00]/15 text-[#FF9E00]';
+                  accentColor = '#FF9E00';
+                  isWarning = true;
                 } else {
-                  statusBorder = `border-l-4 ${theme === 'light' ? 'border-l-[#1C69D4]' : 'border-l-[#00A3E0]'}`;
-                  badgeColor = theme === 'light' ? 'bg-[#1C69D4]/10 text-[#1C69D4]' : 'bg-[#00A3E0]/20 text-[#00A3E0]';
+                  accentColor = theme === 'light' ? '#1C69D4' : '#00A3E0';
                 }
                 
-                triggerDesc = `Expiración: ${new Date(alert.triggerValue).toLocaleDateString('es-ES')}`;
+                triggerDesc = `EXPIRACIÓN: ${new Date(alert.triggerValue).toLocaleDateString('es-ES')}`;
               }
 
               return (
                 <View
                   key={alert.id}
-                  className={`${colors.card} border ${colors.border} rounded-xl p-4 mb-3 flex-row justify-between items-center ${statusBorder}`}
+                  style={{
+                    backgroundColor: tftStyles.cardBg,
+                    borderColor: tftStyles.cardBorder,
+                    borderWidth: 1,
+                    borderRadius: 16,
+                    padding: 14,
+                    marginBottom: 14, // Spacing between cards to prevent them from sticking
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderLeftWidth: 4,
+                    borderLeftColor: accentColor,
+                    opacity: alert.isCompleted ? 0.6 : 1,
+                  }}
                 >
-                  <View className="flex-1">
-                    <View className="flex-row items-center mb-1 space-x-2">
-                      <Text className={`${colors.text} font-semibold text-sm uppercase tracking-wide`}>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 6 }}>
+                      <Text style={{ 
+                        fontFamily: 'Rajdhani-Bold', 
+                        fontSize: 15, 
+                        color: tftStyles.textMain, 
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.5 
+                      }}>
                         {alert.title}
                       </Text>
                       {alert.isCompleted && (
-                        <View className={`border ${theme === 'light' ? 'bg-neutral-100 border-neutral-200' : 'bg-neutral-900 border-neutral-800'} rounded px-1.5 py-0.5`}>
-                          <Text className="text-[9px] text-neutral-500 font-bold uppercase">Hecho</Text>
+                        <View style={{ 
+                          backgroundColor: theme === 'light' ? 'rgba(0,138,34,0.06)' : 'rgba(44,255,10,0.12)', 
+                          borderColor: theme === 'light' ? '#008A22' : '#2CFF0A', 
+                          borderWidth: 0.5,
+                          borderRadius: 4, 
+                          paddingHorizontal: 6, 
+                          paddingVertical: 1 
+                        }}>
+                          <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 8, color: theme === 'light' ? '#008A22' : '#2CFF0A', textTransform: 'uppercase' }}>
+                            HECHO
+                          </Text>
+                        </View>
+                      )}
+                      {isCritical && !alert.isCompleted && (
+                        <View style={{ 
+                          backgroundColor: 'rgba(227,6,19,0.1)', 
+                          borderColor: '#E30613', 
+                          borderWidth: 0.5,
+                          borderRadius: 4, 
+                          paddingHorizontal: 6, 
+                          paddingVertical: 1 
+                        }}>
+                          <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 8, color: '#E30613', textTransform: 'uppercase' }}>
+                            CRÍTICO
+                          </Text>
+                        </View>
+                      )}
+                      {isWarning && !alert.isCompleted && (
+                        <View style={{ 
+                          backgroundColor: 'rgba(255,158,0,0.1)', 
+                          borderColor: '#FF9E00', 
+                          borderWidth: 0.5,
+                          borderRadius: 4, 
+                          paddingHorizontal: 6, 
+                          paddingVertical: 1 
+                        }}>
+                          <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 8, color: '#FF9E00', textTransform: 'uppercase' }}>
+                            ATENCIÓN
+                          </Text>
                         </View>
                       )}
                     </View>
-                    <View className="flex-row items-center space-x-3 mt-1">
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                       {alert.triggerType === 'MILEAGE' ? (
-                        <Activity size={12} color={theme === 'light' ? '#4E5E72' : '#8F9CAE'} />
+                        <Activity size={12} color={accentColor} />
                       ) : (
-                        <Calendar size={12} color={theme === 'light' ? '#4E5E72' : '#8F9CAE'} />
+                        <Calendar size={12} color={accentColor} />
                       )}
-                      <Text className={`${colors.textSec} text-xs font-medium`}>{triggerDesc}</Text>
+                      <Text style={{ 
+                        fontFamily: 'BarlowCondensed-Bold', 
+                        fontSize: 12, 
+                        color: tftStyles.textSec, 
+                        marginLeft: 6,
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.5
+                      }}>
+                        {triggerDesc}
+                      </Text>
                     </View>
+
+                    {alert.lastPerformedValue && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, opacity: 0.8 }}>
+                        <CheckCircle2 size={11} color={tftStyles.timeText} />
+                        <Text style={{ 
+                          fontFamily: 'BarlowCondensed-Medium', 
+                          fontSize: 10, 
+                          color: theme === 'light' ? '#718096' : '#A0AEC0', 
+                          marginLeft: 4,
+                          textTransform: 'uppercase',
+                          letterSpacing: 0.5
+                        }}>
+                          Último: {alert.triggerType === 'MILEAGE'
+                            ? `${parseInt(alert.lastPerformedValue).toLocaleString()} km`
+                            : new Date(alert.lastPerformedValue).toLocaleDateString('es-ES')
+                          }
+                        </Text>
+                      </View>
+                    )}
                   </View>
 
                   {/* Actions */}
-                  <View className="flex-row space-x-2 ml-4">
+                  <View style={{ flexDirection: 'row', gap: 8, marginLeft: 16 }}>
                     {!alert.isCompleted && (
                       <TouchableOpacity
-                        onPress={() => handleResolveAlert(alert.id)}
-                        className={`${colors.subCard} border ${colors.border} p-2 rounded-lg`}
+                        onPress={() => {
+                          setEditingAlertId(alert.id);
+                          setModalMode('RESOLVE');
+                          setTitle(alert.title);
+                          setTriggerType(alert.triggerType);
+                          
+                          if (alert.triggerType === 'MILEAGE') {
+                            const currentOdo = vehicle.currentMileage;
+                            setLastPerformedValue(currentOdo.toString());
+                            
+                            let interval = 3000;
+                            if (alert.lastPerformedValue) {
+                              const prevLast = parseInt(alert.lastPerformedValue);
+                              const prevTarget = parseInt(alert.triggerValue);
+                              if (prevTarget > prevLast) interval = prevTarget - prevLast;
+                            }
+                            setTriggerValue((currentOdo + interval).toString());
+                          } else {
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            setLastPerformedValue(todayStr);
+                            
+                            const nextYear = new Date();
+                            nextYear.setFullYear(nextYear.getFullYear() + 1);
+                            setTriggerValue(nextYear.toISOString().split('T')[0]);
+                          }
+                          setModalVisible(true);
+                        }}
+                        style={{
+                          padding: 8,
+                          backgroundColor: theme === 'light' ? 'rgba(0,138,34,0.06)' : 'rgba(44,255,10,0.12)',
+                          borderRadius: 10,
+                          borderColor: theme === 'light' ? '#008A22' : '#2CFF0A',
+                          borderWidth: 0.5,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
                       >
-                        <Check size={16} color={colors.statusGreen} />
+                        <Check size={14} color={theme === 'light' ? '#008A22' : '#2CFF0A'} />
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity
                       onPress={() => handleDeleteAlert(alert.id)}
-                      className={`${colors.subCard} border ${colors.border} p-2 rounded-lg`}
+                      style={{
+                        padding: 8,
+                        backgroundColor: theme === 'light' ? 'rgba(224,0,0,0.06)' : 'rgba(224,0,0,0.12)',
+                        borderRadius: 10,
+                        borderColor: colors.bmwRed,
+                        borderWidth: 0.5,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
                     >
-                      <Trash2 size={16} color={colors.bmwRed} />
+                      <Trash2 size={14} color={colors.bmwRed} />
                     </TouchableOpacity>
                   </View>
                 </View>
               );
             })
           ) : (
-            <View className={`${colors.card} border ${colors.border} rounded-xl p-6 items-center`}>
-              <CheckCircle2 size={32} color={colors.bmwBlue} />
-              <Text className={`${colors.text} text-center mt-2 font-medium`}>Sin alertas programadas</Text>
-              <Text className={`${colors.textSec} text-center text-xs mt-1`}>Presiona el botón superior para agregar un recordatorio.</Text>
+            <View 
+              style={{
+                backgroundColor: tftStyles.cardBg,
+                borderColor: tftStyles.cardBorder,
+                borderWidth: 1,
+                borderRadius: 16,
+                padding: 24,
+                alignItems: 'center',
+                borderStyle: 'dashed',
+              }}
+            >
+              <Bell size={28} color={theme === 'light' ? '#4E5E72' : '#8E9FBC'} style={{ opacity: 0.6, marginBottom: 8 }} />
+              <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 14, color: tftStyles.textMain, textTransform: 'uppercase', letterSpacing: 1 }}>
+                Sin alertas programadas
+              </Text>
+              <Text style={{ fontFamily: 'BarlowCondensed-Medium', fontSize: 11, color: tftStyles.textSec, textAlign: 'center', marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Presiona "+ ALERTA" para configurar un recordatorio.
+              </Text>
             </View>
           )}
         </ScrollView>
       )}
 
-
       {/* Add Alert Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          className="flex-1"
+          style={{ flex: 1 }}
         >
-          <View className="flex-1 bg-black/60 justify-end">
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
             <View 
-              className={`${colors.card} border-t ${colors.border} rounded-t-3xl max-h-[85%]`}
               style={{
+                backgroundColor: tftStyles.cardBg,
+                borderTopWidth: 1,
+                borderTopColor: tftStyles.cardBorder,
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                maxHeight: '85%',
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: -10 },
                 shadowOpacity: theme === 'light' ? 0.05 : 0.4,
@@ -359,144 +580,353 @@ export default function AlertsScreen() {
             >
               <ScrollView 
                 contentContainerStyle={{ padding: 24, paddingBottom: 60 }}
-                className="w-full"
+                style={{ width: '100%' }}
                 keyboardShouldPersistTaps="handled"
               >
                 {/* Header */}
-                <View className="flex-row justify-between items-center mb-6">
-                  <Text className={`font-orbitron text-lg font-bold uppercase tracking-wider ${colors.text}`}>
-                    NUEVO RECORDATORIO
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 18, color: tftStyles.textMain, textTransform: 'uppercase', letterSpacing: 2 }}>
+                    {modalMode === 'CREATE' ? 'NUEVO RECORDATORIO' : 'REGISTRAR MANTENIMIENTO'}
                   </Text>
-                  <TouchableOpacity onPress={() => setModalVisible(false)} className="p-1">
+                  <TouchableOpacity onPress={() => setModalVisible(false)} style={{ padding: 4 }}>
                     <X size={24} color={theme === 'light' ? '#002C5B' : '#F8F9FA'} />
                   </TouchableOpacity>
                 </View>
 
-                {/* Alert Type Selection */}
-                <View className="mb-4 relative">
-                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
-                    Categoría del Mantenimiento
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setIsTypeDropdownOpen(!isTypeDropdownOpen)}
-                    className={`flex-row justify-between items-center w-full ${colors.subCard} border ${colors.border} rounded-xl px-4 py-3`}
-                  >
-                    <Text className={`${colors.text} font-semibold`}>{typeLabel}</Text>
-                    <ChevronDown size={18} color={activeBmwColor} />
-                  </TouchableOpacity>
+                {modalMode === 'RESOLVE' && (
+                  <View style={{ 
+                    marginBottom: 16, 
+                    backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12', 
+                    borderWidth: 1, 
+                    borderColor: tftStyles.cardBorder, 
+                    borderRadius: 12, 
+                    padding: 14 
+                  }}>
+                    <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 9, color: theme === 'light' ? '#718096' : '#A0AEC0', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
+                      Mantenimiento Activo
+                    </Text>
+                    <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 15, color: tftStyles.textMain, textTransform: 'uppercase' }}>
+                      {title}
+                    </Text>
+                    <Text style={{ fontFamily: 'BarlowCondensed-Medium', fontSize: 11, color: tftStyles.textSec, marginTop: 6, textTransform: 'uppercase' }}>
+                      Odómetro actual de la moto: <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 11 }}>{vehicle?.currentMileage.toLocaleString()}</Text> km
+                    </Text>
+                  </View>
+                )}
 
-                  {isTypeDropdownOpen && (
-                    <View 
-                      className={`absolute top-[75px] left-0 right-0 border ${colors.border} rounded-xl`}
+                {modalMode === 'CREATE' && (
+                  <>
+                    {/* Alert Type Selection */}
+                    <View style={{ marginBottom: 16, zIndex: 100 }}>
+                      <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 11, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+                        Categoría del Mantenimiento
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => setIsTypeDropdownOpen(!isTypeDropdownOpen)}
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          width: '100%',
+                          backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12',
+                          borderWidth: 1,
+                          borderColor: tftStyles.cardBorder,
+                          borderRadius: 12,
+                          paddingHorizontal: 16,
+                          paddingVertical: 12,
+                        }}
+                      >
+                        <Text style={{ fontFamily: 'Rajdhani-SemiBold', fontSize: 14, color: tftStyles.textMain }}>{typeLabel}</Text>
+                        <ChevronDown size={18} color={activeBmwColor} />
+                      </TouchableOpacity>
+
+                      {isTypeDropdownOpen && (
+                        <View 
+                          style={{
+                            position: 'absolute',
+                            top: 75,
+                            left: 0,
+                            right: 0,
+                            borderWidth: 1,
+                            borderColor: tftStyles.cardBorder,
+                            borderRadius: 12,
+                            backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                            zIndex: 100,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 10 },
+                            shadowOpacity: theme === 'light' ? 0.05 : 0.4,
+                            shadowRadius: 15,
+                            elevation: 8
+                          }}
+                        >
+                          {ALERT_TYPES.map((item) => (
+                            <TouchableOpacity
+                              key={item.value}
+                              onPress={() => {
+                                setType(item.value as any);
+                                setTypeLabel(item.label);
+                                setTitle(item.label);
+                                setIsTypeDropdownOpen(false);
+                              }}
+                              style={{
+                                paddingHorizontal: 16,
+                                paddingVertical: 12,
+                                borderBottomWidth: 0.5,
+                                borderBottomColor: tftStyles.cardBorder,
+                              }}
+                            >
+                              <Text style={{ fontFamily: 'Rajdhani-SemiBold', fontSize: 14, color: tftStyles.textMain }}>{item.label}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Custom Title */}
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 11, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+                        Título / Descripción
+                      </Text>
+                      <TextInput
+                        value={title}
+                        placeholder="Ej. Cambio de Aceite 15w50"
+                        placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                        onChangeText={setTitle}
+                        style={{
+                          width: '100%',
+                          backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12',
+                          color: tftStyles.textMain,
+                          fontFamily: 'Rajdhani-SemiBold',
+                          fontSize: 14,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: tftStyles.cardBorder,
+                          paddingHorizontal: 16,
+                          paddingVertical: 12,
+                        }}
+                      />
+                    </View>
+
+                    {/* Trigger Type Toggle */}
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 11, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+                        Gatillo del Recordatorio
+                      </Text>
+                      <View style={{ 
+                        flexDirection: 'row', 
+                        backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12', 
+                        borderWidth: 1, 
+                        borderColor: tftStyles.cardBorder, 
+                        borderRadius: 12, 
+                        padding: 4 
+                      }}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setTriggerType('MILEAGE');
+                            setLastPerformedValue(vehicle ? vehicle.currentMileage.toString() : '');
+                            setTriggerValue(vehicle ? (vehicle.currentMileage + 3000).toString() : '');
+                          }}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 8,
+                            borderRadius: 8,
+                            alignItems: 'center',
+                            backgroundColor: triggerType === 'MILEAGE' ? '#1C69D4' : 'transparent'
+                          }}
+                        >
+                          <Text style={{
+                            fontFamily: 'BarlowCondensed-Bold',
+                            fontSize: 11,
+                            textTransform: 'uppercase',
+                            letterSpacing: 1,
+                            color: triggerType === 'MILEAGE' ? '#FFFFFF' : tftStyles.textSec
+                          }}>
+                            Por Kilometraje
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={() => {
+                            setTriggerType('DATE');
+                            setLastPerformedValue(new Date().toISOString().split('T')[0]);
+                            const nextYear = new Date();
+                            nextYear.setFullYear(nextYear.getFullYear() + 1);
+                            setTriggerValue(nextYear.toISOString().split('T')[0]);
+                          }}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 8,
+                            borderRadius: 8,
+                            alignItems: 'center',
+                            backgroundColor: triggerType === 'DATE' ? '#1C69D4' : 'transparent'
+                          }}
+                        >
+                          <Text style={{
+                            fontFamily: 'BarlowCondensed-Bold',
+                            fontSize: 11,
+                            textTransform: 'uppercase',
+                            letterSpacing: 1,
+                            color: triggerType === 'DATE' ? '#FFFFFF' : tftStyles.textSec
+                          }}>
+                            Por Fecha
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </>
+                )}
+
+                {/* Last Performed Input */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 11, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+                    {triggerType === 'MILEAGE'
+                      ? 'Último cambio / realizado (km)'
+                      : 'Fecha del último cambio'}
+                  </Text>
+                  {triggerType === 'MILEAGE' ? (
+                    <TextInput
+                      value={lastPerformedValue}
+                      placeholder={`Ej. ${vehicle?.currentMileage}`}
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      keyboardType="numeric"
+                      onChangeText={setLastPerformedValue}
                       style={{
-                        backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
-                        zIndex: 50,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 10 },
-                        shadowOpacity: theme === 'light' ? 0.05 : 0.4,
-                        shadowRadius: 15,
-                        elevation: 8
+                        width: '100%',
+                        backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12',
+                        color: tftStyles.textMain,
+                        fontFamily: 'Rajdhani-SemiBold',
+                        fontSize: 14,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: tftStyles.cardBorder,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                      }}
+                    />
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => setShowLastPerformedDatePicker(true)}
+                      style={{
+                        width: '100%',
+                        backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12',
+                        borderWidth: 1,
+                        borderColor: tftStyles.cardBorder,
+                        borderRadius: 12,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                        justifyContent: 'center',
                       }}
                     >
-                      {ALERT_TYPES.map((item) => (
-                        <TouchableOpacity
-                          key={item.value}
-                          onPress={() => {
-                            setType(item.value as any);
-                            setTypeLabel(item.label);
-                            setTitle(item.label); // Auto seed title
-                            setIsTypeDropdownOpen(false);
-                          }}
-                          className={`px-4 py-3 border-b ${colors.border} active:${colors.subCard}`}
-                        >
-                          <Text className={`${colors.text} font-medium`}>{item.label}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
+                      <Text style={{ fontFamily: 'Rajdhani-SemiBold', fontSize: 14, color: lastPerformedValue ? tftStyles.textMain : '#8E9FBC' }}>
+                        {lastPerformedValue ? parseIsoDate(lastPerformedValue).toLocaleDateString('es-ES') : 'Seleccionar fecha'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {showLastPerformedDatePicker && (
+                    <DateTimePicker
+                      value={parseIsoDate(lastPerformedValue)}
+                      mode="date"
+                      display="default"
+                      {...((Platform.OS === 'web'
+                        ? {
+                            onValueChange: (selectedDate: Date) => {
+                              setShowLastPerformedDatePicker(false);
+                              if (selectedDate) setLastPerformedValue(formatIsoDate(selectedDate));
+                            }
+                          }
+                        : {
+                            onChange: (event: any, selectedDate?: Date) => {
+                              setShowLastPerformedDatePicker(false);
+                              if (selectedDate) setLastPerformedValue(formatIsoDate(selectedDate));
+                            }
+                          }
+                      ) as any)}
+                    />
                   )}
                 </View>
 
-                {/* Custom Title */}
-                <View className="mb-4">
-                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
-                    Título / Descripción
-                  </Text>
-                  <TextInput
-                    value={title}
-                    placeholder="Ej. Cambio de Aceite 15w50"
-                    placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
-                    onChangeText={setTitle}
-                    className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-3 text-sm focus:border-[#1C69D4]`}
-                  />
-                </View>
-
-                {/* Trigger Type Toggle */}
-                <View className="mb-4">
-                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
-                    Gatillo del Recordatorio
-                  </Text>
-                  <View className={`flex-row ${colors.subCard} border ${colors.border} rounded-xl p-1`}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setTriggerType('MILEAGE');
-                        setTriggerValue('');
-                      }}
-                      className={`flex-1 py-2 rounded-lg items-center ${
-                        triggerType === 'MILEAGE' ? 'bg-[#1C69D4]' : ''
-                      }`}
-                    >
-                      <Text
-                        className={`font-semibold text-xs uppercase tracking-wider ${
-                          triggerType === 'MILEAGE' ? 'text-white font-bold' : colors.textMuted
-                        }`}
-                      >
-                        Por Kilometraje
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => {
-                        setTriggerType('DATE');
-                        setTriggerValue(new Date().toISOString().split('T')[0]);
-                      }}
-                      className={`flex-1 py-2 rounded-lg items-center ${
-                        triggerType === 'DATE' ? 'bg-[#1C69D4]' : ''
-                      }`}
-                    >
-                      <Text
-                        className={`font-semibold text-xs uppercase tracking-wider ${
-                          triggerType === 'DATE' ? 'text-white font-bold' : colors.textMuted
-                        }`}
-                      >
-                        Por Fecha
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
                 {/* Trigger Value Input */}
-                <View className="mb-6">
-                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
+                <View style={{ marginBottom: 24 }}>
+                  <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 11, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
                     {triggerType === 'MILEAGE'
-                      ? 'Odómetro Objetivo (km)'
-                      : 'Fecha de Expiración (YYYY-MM-DD)'}
+                      ? 'Próximo objetivo / límite (km)'
+                      : 'Próxima expiración / límite'}
                   </Text>
-                  <TextInput
-                    value={triggerValue}
-                    placeholder={triggerType === 'MILEAGE' ? 'Ej. 12000' : 'YYYY-MM-DD'}
-                    placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
-                    keyboardType={triggerType === 'MILEAGE' ? 'numeric' : 'default'}
-                    onChangeText={setTriggerValue}
-                    className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-3 text-sm focus:border-[#1C69D4]`}
-                  />
+                  {triggerType === 'MILEAGE' ? (
+                    <TextInput
+                      value={triggerValue}
+                      placeholder={vehicle ? (vehicle.currentMileage + 3000).toString() : '12000'}
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      keyboardType="numeric"
+                      onChangeText={setTriggerValue}
+                      style={{
+                        width: '100%',
+                        backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12',
+                        color: tftStyles.textMain,
+                        fontFamily: 'Rajdhani-SemiBold',
+                        fontSize: 14,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: tftStyles.cardBorder,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                      }}
+                    />
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => setShowTriggerDatePicker(true)}
+                      style={{
+                        width: '100%',
+                        backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12',
+                        borderWidth: 1,
+                        borderColor: tftStyles.cardBorder,
+                        borderRadius: 12,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Rajdhani-SemiBold', fontSize: 14, color: triggerValue ? tftStyles.textMain : '#8E9FBC' }}>
+                        {triggerValue ? parseIsoDate(triggerValue).toLocaleDateString('es-ES') : 'Seleccionar fecha'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {showTriggerDatePicker && (
+                    <DateTimePicker
+                      value={parseIsoDate(triggerValue)}
+                      mode="date"
+                      display="default"
+                      {...((Platform.OS === 'web'
+                        ? {
+                            onValueChange: (selectedDate: Date) => {
+                              setShowTriggerDatePicker(false);
+                              if (selectedDate) setTriggerValue(formatIsoDate(selectedDate));
+                            }
+                          }
+                        : {
+                            onChange: (event: any, selectedDate?: Date) => {
+                              setShowTriggerDatePicker(false);
+                              if (selectedDate) setTriggerValue(formatIsoDate(selectedDate));
+                            }
+                          }
+                      ) as any)}
+                    />
+                  )}
                 </View>
 
                 {/* Submit */}
                 <TouchableOpacity
-                  onPress={handleCreateAlert}
+                  onPress={handleSaveAlert}
                   disabled={saving}
-                  className="w-full bg-[#1C69D4] rounded-xl py-3.5 items-center justify-center border border-[#1C69D4]"
                   style={{
+                    width: '100%',
+                    backgroundColor: '#1C69D4',
+                    borderRadius: 12,
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: '#1C69D4',
                     shadowColor: '#1C69D4',
                     shadowOffset: { width: 0, height: 0 },
                     shadowOpacity: 0.4,
@@ -507,8 +937,8 @@ export default function AlertsScreen() {
                   {saving ? (
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
-                    <Text className="text-white font-bold text-sm uppercase tracking-widest">
-                      GUARDAR ALERTA
+                    <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 14, color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: 2 }}>
+                      {modalMode === 'CREATE' ? 'GUARDAR RECORDATORIO' : 'GUARDAR MANTENIMIENTO'}
                     </Text>
                   )}
                 </TouchableOpacity>

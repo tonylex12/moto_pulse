@@ -55,8 +55,8 @@ const darkColors: ThemeColors = {
   subCard: 'bg-[#1A202C]', // Charcoal grey/blue card
   border: 'border-[#242D3D]', // Dark metallic border
   text: 'text-white',
-  textSec: 'text-[#A0AEC0]', // Light grey
-  textMuted: 'text-[#718096]', // Medium grey
+  textSec: 'text-[#E2E8F0]', // Bright light grey
+  textMuted: 'text-[#A0AEC0]', // Medium-light grey for readable labels
   textAccent: 'text-[#00A3E0]', // BMW Motorsport Light Blue
   bgAccent: 'bg-[#00A3E0]',
   borderAccent: 'border-[#00A3E0]',

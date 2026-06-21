@@ -4,6 +4,7 @@ module.exports = {
   content: [
     "./app/**/*.{js,jsx,ts,tsx}",
     "./components/**/*.{js,jsx,ts,tsx}",
+    "./utils/**/*.{js,jsx,ts,tsx}",
   ],
   presets: [require("nativewind/preset")],
   theme: {
@@ -35,6 +36,13 @@ module.exports = {
         barlow: ["Barlow"],
         "barlow-semibold": ["Barlow-SemiBold"],
         "barlow-bold": ["Barlow-Bold"],
+        "barlow-condensed": ["BarlowCondensed"],
+        "barlow-condensed-semibold": ["BarlowCondensed-SemiBold"],
+        "barlow-condensed-bold": ["BarlowCondensed-Bold"],
+        rajdhani: ["Rajdhani"],
+        "rajdhani-medium": ["Rajdhani-Medium"],
+        "rajdhani-semibold": ["Rajdhani-SemiBold"],
+        "rajdhani-bold": ["Rajdhani-Bold"],
         inter: ["Inter"],
       },
     },

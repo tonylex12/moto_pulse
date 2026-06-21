@@ -12,6 +12,7 @@ import {
   Keyboard,
   StyleSheet,
 } from "react-native";
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -24,6 +25,7 @@ import {
   X,
   Sun,
   Moon,
+  Pencil,
 } from "lucide-react-native";
 import { api } from "../../utils/api";
 import { usePushNotifications } from "../../hooks/usePushNotifications";
@@ -56,11 +58,12 @@ interface Vehicle {
 
 interface AlertData {
   id: string;
-  type: "OIL_CHANGE" | "BRAKE_PADS" | "INSURANCE_RENEWAL" | "CUSTOM";
+  type: "OIL_CHANGE" | "BRAKE_PADS" | "INSURANCE_RENEWAL" | "PREVENTIVE_MAINTENANCE" | "CUSTOM";
   title: string;
   triggerType: "MILEAGE" | "DATE";
   triggerValue: string;
   isCompleted: boolean;
+  lastPerformedValue?: string | null;
 }
 
 const POPULAR_BRANDS = [
@@ -79,6 +82,26 @@ const POPULAR_BRANDS = [
   "Otro / Manual",
 ];
 
+const parseIsoDate = (dateStr: string) => {
+  if (!dateStr) return new Date();
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1;
+    const day = parseInt(parts[2]);
+    return new Date(year, month, day);
+  }
+  const parsed = Date.parse(dateStr);
+  return isNaN(parsed) ? new Date() : new Date(parsed);
+};
+
+const formatIsoDate = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 export default function DashboardScreen() {
   const { user } = useUser();
   const { signOut } = useAuth();
@@ -95,6 +118,15 @@ export default function DashboardScreen() {
   const [isGarageOpen, setIsGarageOpen] = useState(false);
   const [isRegisteringNew, setIsRegisteringNew] = useState(false);
 
+  // Maintenance Resolve Modal States
+  const [maintenanceModalVisible, setMaintenanceModalVisible] = useState(false);
+  const [selectedAlert, setSelectedAlert] = useState<AlertData | null>(null);
+  const [lastPerformedValue, setLastPerformedValue] = useState("");
+  const [triggerValue, setTriggerValue] = useState("");
+  const [savingMaintenance, setSavingMaintenance] = useState(false);
+  const [showLastPerformedDatePicker, setShowLastPerformedDatePicker] = useState(false);
+  const [showTriggerDatePicker, setShowTriggerDatePicker] = useState(false);
+
   // Form State for Vehicle Registration
   const [brand, setBrand] = useState("Honda");
   const [customBrand, setCustomBrand] = useState("");
@@ -105,6 +137,75 @@ export default function DashboardScreen() {
   const [registering, setRegistering] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [fetchingSpecs, setFetchingSpecs] = useState(false);
+
+  // Specs Edit Modal States
+  const [editSpecsModalVisible, setEditSpecsModalVisible] = useState(false);
+  const [editEngineCc, setEditEngineCc] = useState('');
+  const [editTankSize, setEditTankSize] = useState('');
+  const [editPower, setEditPower] = useState('');
+  const [editTorque, setEditTorque] = useState('');
+  const [editTransmission, setEditTransmission] = useState('');
+  const [editWeight, setEditWeight] = useState('');
+  const [editFrontTire, setEditFrontTire] = useState('');
+  const [editRearTire, setEditRearTire] = useState('');
+  const [editFrontBrake, setEditFrontBrake] = useState('');
+  const [editRearBrake, setEditRearBrake] = useState('');
+  const [editFrontSuspension, setEditFrontSuspension] = useState('');
+  const [editRearSuspension, setEditRearSuspension] = useState('');
+  const [savingSpecs, setSavingSpecs] = useState(false);
+
+  const openEditSpecsModal = () => {
+    if (!vehicle) return;
+    setEditEngineCc(vehicle.engineCc || '');
+    setEditTankSize(vehicle.tankSize || '');
+    setEditPower(vehicle.power || '');
+    setEditTorque(vehicle.torque || '');
+    setEditTransmission(vehicle.transmission || '');
+    setEditWeight(vehicle.weight || '');
+    setEditFrontTire(vehicle.frontTire || '');
+    setEditRearTire(vehicle.rearTire || '');
+    setEditFrontBrake(vehicle.frontBrake || '');
+    setEditRearBrake(vehicle.rearBrake || '');
+    setEditFrontSuspension(vehicle.frontSuspension || '');
+    setEditRearSuspension(vehicle.rearSuspension || '');
+    setEditSpecsModalVisible(true);
+  };
+
+  const handleSaveSpecs = async () => {
+    if (!vehicle) return;
+    try {
+      setSavingSpecs(true);
+      const res = await api.put(`vehicles/${vehicle.id}`, {
+        brand: vehicle.brand,
+        model: vehicle.model,
+        year: vehicle.year,
+        currentMileage: vehicle.currentMileage,
+        engineCc: editEngineCc || null,
+        tankSize: editTankSize || null,
+        power: editPower || null,
+        torque: editTorque || null,
+        transmission: editTransmission || null,
+        weight: editWeight || null,
+        frontTire: editFrontTire || null,
+        rearTire: editRearTire || null,
+        frontBrake: editFrontBrake || null,
+        rearBrake: editRearBrake || null,
+        frontSuspension: editFrontSuspension || null,
+        rearSuspension: editRearSuspension || null,
+        specSource: vehicle.specSource || 'Manual',
+      });
+      
+      setVehicle(res.data);
+      setVehicles(prev => prev.map(v => v.id === vehicle.id ? res.data : v));
+      setEditSpecsModalVisible(false);
+      showAlert('Ficha Técnica', 'Ficha técnica actualizada correctamente.');
+    } catch (e) {
+      console.error('Error saving specs manually:', e);
+      showAlert('Error', 'No se pudieron guardar las especificaciones.');
+    } finally {
+      setSavingSpecs(false);
+    }
+  };
 
   const handleFetchSpecs = async () => {
     if (!vehicle) return;
@@ -227,6 +328,7 @@ export default function DashboardScreen() {
       // Auto-create default alerts for new riders
       const bikeId = newBike.id;
       const initialMileage = newBike.currentMileage;
+      const todayStr = new Date().toISOString();
 
       // 1. Oil change alert in 3,000 km
       await api.post("alerts", {
@@ -235,18 +337,30 @@ export default function DashboardScreen() {
         title: "Cambio de Aceite",
         triggerType: "MILEAGE",
         triggerValue: (initialMileage + 3000).toString(),
+        lastPerformedValue: initialMileage.toString(),
       });
 
-      // 2. Brake pads check in 10,000 km
+      // 2. Mantenimiento Preventivo in 6,000 km
+      await api.post("alerts", {
+        vehicleId: bikeId,
+        type: "PREVENTIVE_MAINTENANCE",
+        title: "Mantenimiento Preventivo",
+        triggerType: "MILEAGE",
+        triggerValue: (initialMileage + 6000).toString(),
+        lastPerformedValue: initialMileage.toString(),
+      });
+
+      // 3. Brake pads check in 10,000 km
       await api.post("alerts", {
         vehicleId: bikeId,
         type: "BRAKE_PADS",
         title: "Pastillas de Freno",
         triggerType: "MILEAGE",
         triggerValue: (initialMileage + 10000).toString(),
+        lastPerformedValue: initialMileage.toString(),
       });
 
-      // 3. Insurance renewal in 1 year
+      // 4. Insurance renewal in 1 year
       const nextYear = new Date();
       nextYear.setFullYear(nextYear.getFullYear() + 1);
       await api.post("alerts", {
@@ -255,6 +369,7 @@ export default function DashboardScreen() {
         title: "Renovación de Seguro",
         triggerType: "DATE",
         triggerValue: nextYear.toISOString(),
+        lastPerformedValue: todayStr,
       });
 
       showAlert(
@@ -302,6 +417,56 @@ export default function DashboardScreen() {
         { text: "Salir", style: "destructive", onPress: () => signOut() },
       ],
     );
+  };
+
+  const handleSaveMaintenance = async () => {
+    if (!vehicle || !selectedAlert) return;
+    if (!triggerValue || !lastPerformedValue) {
+      showAlert("Error", "Por favor completa todos los campos");
+      return;
+    }
+
+    if (selectedAlert.triggerType === "MILEAGE") {
+      const mileageVal = parseInt(triggerValue);
+      const lastVal = parseInt(lastPerformedValue);
+      if (isNaN(mileageVal) || mileageVal <= 0 || isNaN(lastVal) || lastVal < 0) {
+        showAlert("Error", "Los valores del odómetro deben ser números positivos");
+        return;
+      }
+      if (mileageVal <= lastVal) {
+        showAlert("Error", "El odómetro objetivo debe ser mayor que el del último mantenimiento");
+        return;
+      }
+    } else {
+      const dateVal = Date.parse(triggerValue);
+      const lastDateVal = Date.parse(lastPerformedValue);
+      if (isNaN(dateVal) || isNaN(lastDateVal)) {
+        showAlert("Error", "Ingresa fechas válidas (Formato YYYY-MM-DD)");
+        return;
+      }
+      if (dateVal <= lastDateVal) {
+        showAlert("Error", "La fecha de expiración debe ser posterior a la del último mantenimiento");
+        return;
+      }
+    }
+
+    setSavingMaintenance(true);
+    try {
+      const payload = {
+        lastPerformedValue,
+        triggerValue,
+        isCompleted: false, // reset back to active
+      };
+      await api.put(`alerts/${selectedAlert.id}`, payload);
+      showAlert("Mantenimiento Registrado", "Se ha actualizado el ciclo del recordatorio.");
+      setMaintenanceModalVisible(false);
+      fetchData();
+    } catch (e: any) {
+      console.error(e);
+      showAlert("Error", e.response?.data?.error || "No se pudo registrar el mantenimiento");
+    } finally {
+      setSavingMaintenance(false);
+    }
   };
 
   const activeBmwColor =
@@ -380,7 +545,7 @@ export default function DashboardScreen() {
           </View>
           <View>
             <Text
-              className={`font-orbitron text-sm font-bold tracking-widest leading-none ${colors.text}`}
+              className={`font-rajdhani-bold text-base font-bold tracking-[3px] leading-none ${colors.text}`}
             >
               MOTO
               <Text
@@ -394,7 +559,7 @@ export default function DashboardScreen() {
             {vehicle && (
               <View className="flex-row items-center mt-0.5">
                 <Text
-                  className={`${theme === "light" ? "text-[#1C69D4]" : "text-[#00A3E0]"} text-xs font-semibold mr-1`}
+                  className={`${theme === "light" ? "text-[#1C69D4]" : "text-[#00A3E0]"} font-barlow-condensed-bold text-xs font-bold uppercase tracking-wider mr-1`}
                 >
                   {vehicle.brand} {vehicle.model}
                 </Text>
@@ -630,14 +795,16 @@ export default function DashboardScreen() {
 
               {/* Ficha Técnica specs grid populated dynamically by Gemini */}
               <Text
-                className={`${colors.textSec} font-bold text-xs uppercase tracking-widest mb-4`}
+                style={{ color: theme === 'light' ? '#4E5E72' : '#E2E8F0' }}
+                className="font-rajdhani-bold text-xs font-bold uppercase tracking-[2px] mb-4"
               >
                 FICHA TÉCNICA (ESPECIFICACIONES)
               </Text>
 
               <View
-                className={`${colors.card} p-5 mb-6`}
+                className="p-5 mb-6"
                 style={{
+                  backgroundColor: theme === "light" ? "#FFFFFF" : "#121620",
                   borderRadius: 20,
                   borderWidth: 1,
                   borderColor: theme === "light" ? "#D8E0EB" : "#242D3D",
@@ -645,55 +812,87 @@ export default function DashboardScreen() {
               >
                 {fetchingSpecs ? (
                   <View
-                    className={`py-4 items-center justify-center border-b ${colors.border} mb-4`}
+                    className="py-4 items-center justify-center mb-4"
+                    style={{
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme === "light" ? "#D8E0EB" : "#242D3D",
+                    }}
                   >
                     <ActivityIndicator size="small" color={activeBmwColor} />
                     <Text
-                      className={`${colors.textSec} text-[10px] font-semibold mt-2 tracking-wider uppercase`}
+                      style={{ color: theme === 'light' ? '#4E5E72' : '#E2E8F0' }}
+                      className="text-[10px] font-semibold mt-2 tracking-wider uppercase"
                     >
                       Buscando ficha técnica en la web con AI...
                     </Text>
                   </View>
                 ) : !vehicle.specSource ? (
                   <View
-                    className={`${colors.subCard} border border-dashed ${colors.border} rounded-xl p-4 mb-4 items-center justify-center`}
+                    className="border border-dashed rounded-xl p-4 mb-4 items-center justify-center"
+                    style={{ borderColor: theme === "light" ? "#D8E0EB" : "#242D3D" }}
                   >
                     <Text
-                      className={`${colors.textSec} text-xs text-center mb-3 leading-normal font-sans`}
+                      style={{ color: theme === 'light' ? '#4E5E72' : '#E2E8F0' }}
+                      className="text-xs text-center mb-3 leading-normal font-sans"
                     >
                       Ficha técnica vacía. Puedes buscar sus especificaciones
                       técnicas reales en la web utilizando Inteligencia
-                      Artificial.
+                      Artificial, o ingresarlas tú mismo.
                     </Text>
-                    <TouchableOpacity
-                      onPress={handleFetchSpecs}
-                      className="bg-[#1C69D4] px-5 py-2.5 rounded-xl flex-row items-center"
-                      style={{
-                        shadowColor: "#1C69D4",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.5,
-                        shadowRadius: 6,
-                        elevation: 3,
-                      }}
-                    >
-                      <Text className="text-white text-xs font-bold uppercase tracking-wider">
-                        Buscar Ficha Técnica con AI
-                      </Text>
-                    </TouchableOpacity>
+                    <View className="flex-row flex-wrap justify-center gap-2">
+                      <TouchableOpacity
+                        onPress={handleFetchSpecs}
+                        className="bg-[#1C69D4] px-4 py-2.5 rounded-xl flex-row items-center mr-2"
+                        style={{
+                          shadowColor: "#1C69D4",
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.5,
+                          shadowRadius: 6,
+                          elevation: 3,
+                        }}
+                      >
+                        <Text className="text-white text-xs font-bold uppercase tracking-wider">
+                          Buscar con AI
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={openEditSpecsModal}
+                        className="bg-neutral-500/10 border border-neutral-400/30 px-4 py-2.5 rounded-xl flex-row items-center"
+                      >
+                        <Pencil size={12} color={theme === 'light' ? '#1C69D4' : '#00A3E0'} style={{ marginRight: 4 }} />
+                        <Text className="text-xs font-bold uppercase tracking-wider ml-1" style={{ color: theme === 'light' ? '#1C69D4' : '#00A3E0' }}>
+                          Ingresar Datos
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 ) : (
                   <View
-                    className={`flex-row justify-between items-center mb-4 border-b ${colors.border} pb-3`}
+                    className="mb-4 pb-3"
+                    style={{
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme === "light" ? "#D8E0EB" : "#242D3D",
+                    }}
                   >
-                    <View className="flex-row items-center">
-                      <ShieldCheck size={16} color={colors.statusGreen} />
-                      <Text
-                        className={`${colors.text} text-xs font-bold uppercase ml-1.5 tracking-wider`}
+                    <View className="flex-row justify-between items-center mb-1.5">
+                      <View className="flex-row items-center">
+                        <ShieldCheck size={16} color={colors.statusGreen} />
+                        <Text
+                          style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
+                          className="text-xs font-bold uppercase ml-1.5 tracking-wider"
+                        >
+                          {vehicle.specSource === 'Manual' ? 'Datos Manuales' : 'Datos de Internet'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={openEditSpecsModal}
+                        className="px-2 py-1 bg-neutral-500/10 rounded-lg flex-row items-center"
                       >
-                        Datos de Internet
-                      </Text>
+                        <Pencil size={10} color={theme === 'light' ? '#1C69D4' : '#00A3E0'} />
+                        <Text className="text-[9px] font-bold uppercase ml-1" style={{ color: theme === 'light' ? '#1C69D4' : '#00A3E0' }}>Editar</Text>
+                      </TouchableOpacity>
                     </View>
-                    <Text className="text-[9px] text-neutral-500 uppercase tracking-widest">
+                    <Text className="text-[9px] text-neutral-500 uppercase tracking-widest mt-1">
                       Fuente: {vehicle.specSource}
                     </Text>
                   </View>
@@ -702,76 +901,108 @@ export default function DashboardScreen() {
                 <View className="flex-row flex-wrap">
                   <View className="w-1/2 pr-2 mb-3.5">
                     <Text
-                      className={`${colors.textMuted} text-[10px] uppercase font-bold tracking-wider mb-0.5`}
+                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
+                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-0.5"
                     >
                       Motor / Cilindrada
                     </Text>
-                    <Text className={`${colors.text} text-sm font-semibold`}>
+                    <Text
+                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
+                      className="font-rajdhani-semibold text-base font-semibold"
+                    >
                       {vehicle.engineCc || "No disponible"}
                     </Text>
                   </View>
                   <View className="w-1/2 pl-2 mb-3.5">
                     <Text
-                      className={`${colors.textMuted} text-[10px] uppercase font-bold tracking-wider mb-0.5 font-sans`}
+                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
+                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-0.5"
                     >
                       Depósito
                     </Text>
-                    <Text className={`${colors.text} text-sm font-semibold`}>
+                    <Text
+                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
+                      className="font-rajdhani-semibold text-base font-semibold"
+                    >
                       {vehicle.tankSize || "No disponible"}
                     </Text>
                   </View>
 
                   <View className="w-1/2 pr-2 mb-3.5">
                     <Text
-                      className={`${colors.textMuted} text-[10px] uppercase font-bold tracking-wider mb-0.5 font-sans`}
+                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
+                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-0.5"
                     >
                       Potencia
                     </Text>
-                    <Text className={`${colors.text} text-sm font-semibold`}>
+                    <Text
+                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
+                      className="font-rajdhani-semibold text-base font-semibold"
+                    >
                       {vehicle.power || "No disponible"}
                     </Text>
                   </View>
                   <View className="w-1/2 pl-2 mb-3.5">
                     <Text
-                      className={`${colors.textMuted} text-[10px] uppercase font-bold tracking-wider mb-0.5`}
+                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
+                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-0.5"
                     >
                       Torque
                     </Text>
-                    <Text className={`${colors.text} text-sm font-semibold`}>
+                    <Text
+                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
+                      className="font-rajdhani-semibold text-base font-semibold"
+                    >
                       {vehicle.torque || "No disponible"}
                     </Text>
                   </View>
 
                   <View className="w-1/2 pr-2 mb-3.5">
                     <Text
-                      className={`${colors.textMuted} text-[10px] uppercase font-bold tracking-wider mb-0.5`}
+                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
+                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-0.5"
                     >
                       Transmisión
                     </Text>
-                    <Text className={`${colors.text} text-sm font-semibold`}>
+                    <Text
+                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
+                      className="font-rajdhani-semibold text-base font-semibold"
+                    >
                       {vehicle.transmission || "No disponible"}
                     </Text>
                   </View>
                   <View className="w-1/2 pl-2 mb-3.5">
                     <Text
-                      className={`${colors.textMuted} text-[10px] uppercase font-bold tracking-wider mb-0.5`}
+                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
+                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-0.5"
                     >
                       Peso
                     </Text>
-                    <Text className={`${colors.text} text-sm font-semibold`}>
+                    <Text
+                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
+                      className="font-rajdhani-semibold text-base font-semibold"
+                    >
                       {vehicle.weight || "No disponible"}
                     </Text>
                   </View>
 
                   <View
-                    className={`w-full border-t ${colors.border} pt-3 mt-1.5 mb-3.5`}
+                    className="w-full pt-3 mt-1.5 mb-3.5"
+                    style={{
+                      borderTopWidth: 1,
+                      borderTopColor: theme === "light" ? "#D8E0EB" : "#242D3D",
+                    }}
                   >
                     <Text
-                      className={`${colors.textMuted} text-[10px] uppercase font-bold tracking-wider mb-1`}
+                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
+                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-1"
                     >
                       Neumáticos (Del / Tras)
                     </Text>
-                    <Text className={`${colors.text} text-sm font-semibold`}>
+                    <Text
+                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
+                      className="font-rajdhani-semibold text-base font-semibold"
+                    >
                       {vehicle.frontTire || "No disp."} /{" "}
                       {vehicle.rearTire || "No disp."}
                     </Text>
@@ -779,42 +1010,58 @@ export default function DashboardScreen() {
 
                   <View className="w-full mb-3.5">
                     <Text
-                      className={`${colors.textMuted} text-[10px] uppercase font-bold tracking-wider mb-1`}
+                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
+                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-1"
                     >
                       Freno Delantero
                     </Text>
-                    <Text className={`${colors.text} text-sm font-semibold`}>
+                    <Text
+                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
+                      className="font-rajdhani-semibold text-base font-semibold"
+                    >
                       {vehicle.frontBrake || "No disponible"}
                     </Text>
                   </View>
                   <View className="w-full mb-3.5">
                     <Text
-                      className={`${colors.textMuted} text-[10px] uppercase font-bold tracking-wider mb-1`}
+                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
+                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-1"
                     >
                       Freno Trasero
                     </Text>
-                    <Text className={`${colors.text} text-sm font-semibold`}>
+                    <Text
+                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
+                      className="font-rajdhani-semibold text-base font-semibold"
+                    >
                       {vehicle.rearBrake || "No disponible"}
                     </Text>
                   </View>
 
                   <View className="w-full mb-3.5">
                     <Text
-                      className={`${colors.textMuted} text-[10px] uppercase font-bold tracking-wider mb-1`}
+                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
+                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-1"
                     >
                       Suspensión Delantera
                     </Text>
-                    <Text className={`${colors.text} text-sm font-semibold`}>
+                    <Text
+                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
+                      className="font-rajdhani-semibold text-base font-semibold"
+                    >
                       {vehicle.frontSuspension || "No disponible"}
                     </Text>
                   </View>
                   <View className="w-full">
                     <Text
-                      className={`${colors.textMuted} text-[10px] uppercase font-bold tracking-wider mb-1`}
+                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
+                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-1"
                     >
                       Suspensión Trasera
                     </Text>
-                    <Text className={`${colors.text} text-sm font-semibold`}>
+                    <Text
+                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
+                      className="font-rajdhani-semibold text-base font-semibold"
+                    >
                       {vehicle.rearSuspension || "No disponible"}
                     </Text>
                   </View>
@@ -823,7 +1070,7 @@ export default function DashboardScreen() {
 
               {/* Dashboard Subtitle */}
               <Text
-                className={`${colors.textSec} font-bold text-xs uppercase tracking-widest mb-4`}
+                className={`${colors.textSec} font-rajdhani-bold text-xs font-bold uppercase tracking-[2px] mb-4`}
               >
                 ESTADO DEL VEHÍCULO (RPM HEALTH)
               </Text>
@@ -840,7 +1087,34 @@ export default function DashboardScreen() {
                         ? parseInt(alert.triggerValue)
                         : (alert.triggerValue as any)
                     }
+                    lastPerformedValue={alert.lastPerformedValue}
                     type={alert.triggerType}
+                    onPress={alert.isCompleted ? undefined : () => {
+                      setSelectedAlert(alert);
+                      
+                      if (alert.triggerType === "MILEAGE") {
+                        const currentOdo = vehicle.currentMileage;
+                        setLastPerformedValue(currentOdo.toString());
+                        
+                        // Calculate interval
+                        let interval = 3000;
+                        if (alert.lastPerformedValue) {
+                          const prevLast = parseInt(alert.lastPerformedValue);
+                          const prevTarget = parseInt(alert.triggerValue);
+                          if (prevTarget > prevLast) interval = prevTarget - prevLast;
+                        }
+                        setTriggerValue((currentOdo + interval).toString());
+                      } else {
+                        const todayStr = new Date().toISOString().split('T')[0];
+                        setLastPerformedValue(todayStr);
+                        
+                        // Default 1 year interval
+                        const nextYear = new Date();
+                        nextYear.setFullYear(nextYear.getFullYear() + 1);
+                        setTriggerValue(nextYear.toISOString().split('T')[0]);
+                      }
+                      setMaintenanceModalVisible(true);
+                    }}
                   />
                 ))
               ) : (
@@ -871,7 +1145,7 @@ export default function DashboardScreen() {
                   className="animate-pulse"
                 />
                 <Text
-                  className={`${colors.text} font-orbitron text-xl font-bold mt-2 text-center`}
+                  className={`${colors.text} font-barlow-bold text-xl font-bold mt-2 text-center`}
                 >
                   REGISTRA TU MOTO
                 </Text>
@@ -1077,7 +1351,7 @@ export default function DashboardScreen() {
           >
             <View className="flex-row justify-between items-center mb-6">
               <Text
-                className={`${colors.text} font-orbitron text-base font-bold uppercase tracking-wider`}
+                className={`${colors.text} font-barlow-bold text-base font-bold uppercase tracking-wider`}
               >
                 MI GARAJE
               </Text>
@@ -1169,6 +1443,403 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+
+      {/* Quick Maintenance Resolve Modal */}
+      <Modal
+        visible={maintenanceModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setMaintenanceModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          className="flex-1"
+        >
+          <View className="flex-1 bg-black/60 justify-end">
+            <View
+              className={`${colors.card} border-t ${colors.border} rounded-t-3xl`}
+              style={{
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -10 },
+                shadowOpacity: theme === 'light' ? 0.05 : 0.4,
+                shadowRadius: 15,
+                elevation: 8,
+                backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+              }}
+            >
+              <ScrollView
+                contentContainerStyle={{ padding: 24, paddingBottom: 60 }}
+                className="w-full"
+                keyboardShouldPersistTaps="handled"
+              >
+                {/* Header */}
+                <View className="flex-row justify-between items-center mb-6">
+                  <Text className={`font-barlow-bold text-base font-bold uppercase tracking-wider ${colors.text}`}>
+                    REGISTRAR MANTENIMIENTO
+                  </Text>
+                  <TouchableOpacity onPress={() => setMaintenanceModalVisible(false)} className="p-1">
+                    <X size={24} color={theme === 'light' ? '#002C5B' : '#F8F9FA'} />
+                  </TouchableOpacity>
+                </View>
+
+                {selectedAlert && (
+                  <View className={`mb-4 ${colors.subCard} border ${colors.border} rounded-xl p-4`}>
+                    <Text className={`${colors.textMuted} text-[10px] uppercase tracking-wider mb-1`}>Mantenimiento Activo</Text>
+                    <Text className={`${colors.text} font-bold text-sm uppercase`}>{selectedAlert.title}</Text>
+                    <Text className={`${colors.textSec} text-xs mt-1.5`}>Odómetro actual de la moto: <Text className="font-semibold">{vehicle?.currentMileage.toLocaleString()} km</Text></Text>
+                  </View>
+                )}
+
+                {/* Last Performed Input */}
+                <View className="mb-4">
+                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
+                    {selectedAlert?.triggerType === 'MILEAGE'
+                      ? 'Último cambio / realizado (km)'
+                      : 'Fecha del último cambio'}
+                  </Text>
+                  {selectedAlert?.triggerType === 'MILEAGE' ? (
+                    <TextInput
+                      value={lastPerformedValue}
+                      placeholder={`Ej. ${vehicle?.currentMileage}`}
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      keyboardType="numeric"
+                      onChangeText={setLastPerformedValue}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-3 text-sm focus:border-[#1C69D4]`}
+                    />
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => setShowLastPerformedDatePicker(true)}
+                      className={`w-full ${colors.subCard} border ${colors.border} rounded-xl px-4 py-3 justify-center h-[48px]`}
+                    >
+                      <Text className={lastPerformedValue ? colors.text : colors.textMuted}>
+                        {lastPerformedValue ? parseIsoDate(lastPerformedValue).toLocaleDateString('es-ES') : 'Seleccionar fecha'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {showLastPerformedDatePicker && (
+                    <DateTimePicker
+                      value={parseIsoDate(lastPerformedValue)}
+                      mode="date"
+                      display="default"
+                      {...((Platform.OS === 'web'
+                        ? {
+                            onValueChange: (selectedDate: Date) => {
+                              setShowLastPerformedDatePicker(false);
+                              if (selectedDate) setLastPerformedValue(formatIsoDate(selectedDate));
+                            }
+                          }
+                        : {
+                            onChange: (event: any, selectedDate?: Date) => {
+                              setShowLastPerformedDatePicker(false);
+                              if (selectedDate) setLastPerformedValue(formatIsoDate(selectedDate));
+                            }
+                          }
+                      ) as any)}
+                    />
+                  )}
+                </View>
+
+                {/* Trigger Value Input */}
+                <View className="mb-6">
+                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
+                    {selectedAlert?.triggerType === 'MILEAGE'
+                      ? 'Próximo objetivo / límite (km)'
+                      : 'Próxima expiración / límite'}
+                  </Text>
+                  {selectedAlert?.triggerType === 'MILEAGE' ? (
+                    <TextInput
+                      value={triggerValue}
+                      placeholder={vehicle ? (vehicle.currentMileage + 3000).toString() : '12000'}
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      keyboardType="numeric"
+                      onChangeText={setTriggerValue}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-3 text-sm focus:border-[#1C69D4]`}
+                    />
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => setShowTriggerDatePicker(true)}
+                      className={`w-full ${colors.subCard} border ${colors.border} rounded-xl px-4 py-3 justify-center h-[48px]`}
+                    >
+                      <Text className={triggerValue ? colors.text : colors.textMuted}>
+                        {triggerValue ? parseIsoDate(triggerValue).toLocaleDateString('es-ES') : 'Seleccionar fecha'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {showTriggerDatePicker && (
+                    <DateTimePicker
+                      value={parseIsoDate(triggerValue)}
+                      mode="date"
+                      display="default"
+                      {...((Platform.OS === 'web'
+                        ? {
+                            onValueChange: (selectedDate: Date) => {
+                              setShowTriggerDatePicker(false);
+                              if (selectedDate) setTriggerValue(formatIsoDate(selectedDate));
+                            }
+                          }
+                        : {
+                            onChange: (event: any, selectedDate?: Date) => {
+                              setShowTriggerDatePicker(false);
+                              if (selectedDate) setTriggerValue(formatIsoDate(selectedDate));
+                            }
+                          }
+                      ) as any)}
+                    />
+                  )}
+                </View>
+
+                {/* Submit */}
+                <TouchableOpacity
+                  onPress={handleSaveMaintenance}
+                  disabled={savingMaintenance}
+                  className="w-full bg-[#1C69D4] rounded-xl py-3.5 items-center justify-center border border-[#1C69D4]"
+                  style={{
+                    shadowColor: '#1C69D4',
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 12,
+                    elevation: 4
+                  }}
+                >
+                  {savingMaintenance ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text className="text-white font-bold text-sm uppercase tracking-widest">
+                      GUARDAR MANTENIMIENTO
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit Specifications Modal */}
+      <Modal
+        visible={editSpecsModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setEditSpecsModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          className="flex-1"
+        >
+          <View className="flex-1 bg-black/60 justify-end">
+            <View
+              className="border-t rounded-t-3xl"
+              style={{
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -10 },
+                shadowOpacity: theme === 'light' ? 0.05 : 0.4,
+                shadowRadius: 15,
+                elevation: 8,
+                backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                maxHeight: '80%',
+              }}
+            >
+              <ScrollView
+                contentContainerStyle={{ padding: 24, paddingBottom: 60 }}
+                className="w-full"
+                keyboardShouldPersistTaps="handled"
+              >
+                {/* Header */}
+                <View className="flex-row justify-between items-center mb-6">
+                  <Text className={`font-rajdhani-bold text-base font-bold uppercase tracking-wider ${colors.text}`}>
+                    EDITAR FICHA TÉCNICA
+                  </Text>
+                  <TouchableOpacity onPress={() => setEditSpecsModalVisible(false)} className="p-1">
+                    <X size={24} color={theme === 'light' ? '#002C5B' : '#F8F9FA'} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Form fields */}
+                <View>
+                  <View className="mb-3.5">
+                    <Text className={`font-barlow-condensed-bold text-xs uppercase font-bold tracking-wider mb-1 ${colors.textSec}`}>
+                      Motor / Cilindrada
+                    </Text>
+                    <TextInput
+                      value={editEngineCc}
+                      placeholder="Ej. 125 cc"
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      onChangeText={setEditEngineCc}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                    />
+                  </View>
+
+                  <View className="mb-3.5">
+                    <Text className={`font-barlow-condensed-bold text-xs uppercase font-bold tracking-wider mb-1 ${colors.textSec}`}>
+                      Depósito
+                    </Text>
+                    <TextInput
+                      value={editTankSize}
+                      placeholder="Ej. 12 Litros"
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      onChangeText={setEditTankSize}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                    />
+                  </View>
+
+                  <View className="mb-3.5">
+                    <Text className={`font-barlow-condensed-bold text-xs uppercase font-bold tracking-wider mb-1 ${colors.textSec}`}>
+                      Potencia
+                    </Text>
+                    <TextInput
+                      value={editPower}
+                      placeholder="Ej. 15 HP"
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      onChangeText={setEditPower}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                    />
+                  </View>
+
+                  <View className="mb-3.5">
+                    <Text className={`font-barlow-condensed-bold text-xs uppercase font-bold tracking-wider mb-1 ${colors.textSec}`}>
+                      Torque
+                    </Text>
+                    <TextInput
+                      value={editTorque}
+                      placeholder="Ej. 12 Nm"
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      onChangeText={setEditTorque}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                    />
+                  </View>
+
+                  <View className="mb-3.5">
+                    <Text className={`font-barlow-condensed-bold text-xs uppercase font-bold tracking-wider mb-1 ${colors.textSec}`}>
+                      Transmisión
+                    </Text>
+                    <TextInput
+                      value={editTransmission}
+                      placeholder="Ej. 5 velocidades"
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      onChangeText={setEditTransmission}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                    />
+                  </View>
+
+                  <View className="mb-3.5">
+                    <Text className={`font-barlow-condensed-bold text-xs uppercase font-bold tracking-wider mb-1 ${colors.textSec}`}>
+                      Peso
+                    </Text>
+                    <TextInput
+                      value={editWeight}
+                      placeholder="Ej. 130 kg"
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      onChangeText={setEditWeight}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                    />
+                  </View>
+
+                  <View className="mb-3.5">
+                    <Text className={`font-barlow-condensed-bold text-xs uppercase font-bold tracking-wider mb-1 ${colors.textSec}`}>
+                      Neumático Delantero
+                    </Text>
+                    <TextInput
+                      value={editFrontTire}
+                      placeholder="Ej. 90/90-19"
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      onChangeText={setEditFrontTire}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                    />
+                  </View>
+
+                  <View className="mb-3.5">
+                    <Text className={`font-barlow-condensed-bold text-xs uppercase font-bold tracking-wider mb-1 ${colors.textSec}`}>
+                      Neumático Trasero
+                    </Text>
+                    <TextInput
+                      value={editRearTire}
+                      placeholder="Ej. 110/90-17"
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      onChangeText={setEditRearTire}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                    />
+                  </View>
+
+                  <View className="mb-3.5">
+                    <Text className={`font-barlow-condensed-bold text-xs uppercase font-bold tracking-wider mb-1 ${colors.textSec}`}>
+                      Freno Delantero
+                    </Text>
+                    <TextInput
+                      value={editFrontBrake}
+                      placeholder="Ej. Disco 240mm"
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      onChangeText={setEditFrontBrake}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                    />
+                  </View>
+
+                  <View className="mb-3.5">
+                    <Text className={`font-barlow-condensed-bold text-xs uppercase font-bold tracking-wider mb-1 ${colors.textSec}`}>
+                      Freno Trasero
+                    </Text>
+                    <TextInput
+                      value={editRearBrake}
+                      placeholder="Ej. Tambor 130mm"
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      onChangeText={setEditRearBrake}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                    />
+                  </View>
+
+                  <View className="mb-3.5">
+                    <Text className={`font-barlow-condensed-bold text-xs uppercase font-bold tracking-wider mb-1 ${colors.textSec}`}>
+                      Suspensión Delantera
+                    </Text>
+                    <TextInput
+                      value={editFrontSuspension}
+                      placeholder="Ej. Horquilla telescópica"
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      onChangeText={setEditFrontSuspension}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                    />
+                  </View>
+
+                  <View className="mb-6">
+                    <Text className={`font-barlow-condensed-bold text-xs uppercase font-bold tracking-wider mb-1 ${colors.textSec}`}>
+                      Suspensión Trasera
+                    </Text>
+                    <TextInput
+                      value={editRearSuspension}
+                      placeholder="Ej. Doble amortiguador"
+                      placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
+                      onChangeText={setEditRearSuspension}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                    />
+                  </View>
+                </View>
+
+                {/* Submit */}
+                <TouchableOpacity
+                  onPress={handleSaveSpecs}
+                  disabled={savingSpecs}
+                  className="w-full bg-[#1C69D4] rounded-xl py-3.5 items-center justify-center border border-[#1C69D4]"
+                  style={{
+                    shadowColor: '#1C69D4',
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 12,
+                    elevation: 4
+                  }}
+                >
+                  {savingSpecs ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text className="text-white font-bold text-sm uppercase tracking-widest">
+                      GUARDAR FICHA TÉCNICA
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

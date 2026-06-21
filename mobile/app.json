@@ -20,6 +20,15 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "FOREGROUND_SERVICE",
+        "RECORD_AUDIO",
+        "CAMERA",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -38,7 +47,22 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MotoPulse necesita acceder a tu cámara para grabar videos con telemetría en tiempo real.",
+          "microphonePermission": "MotoPulse necesita acceder a tu micrófono para grabar el audio del motor en tus rutas."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "MotoPulse necesita acceder a tu galería para guardar los videos de tus rutas.",
+          "savePhotosPermission": "MotoPulse necesita acceder a tu galería para guardar los videos de tus rutas."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

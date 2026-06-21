@@ -18,7 +18,7 @@ const fuelLogSchema = z.object({
 // GET fuel logs for a vehicle
 router.get('/vehicle/:vehicleId', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     const { vehicleId } = req.params;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -42,7 +42,7 @@ router.get('/vehicle/:vehicleId', requireClerkAuth, async (req: AuthRequest, res
 // POST create fuel log
 router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
     const parsed = fuelLogSchema.safeParse(req.body);
@@ -96,7 +96,7 @@ router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
 // DELETE fuel log
 router.delete('/:id', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     const { id } = req.params;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -119,7 +119,7 @@ router.delete('/:id', requireClerkAuth, async (req: AuthRequest, res: Response) 
 // GET stats for vehicle
 router.get('/stats/:vehicleId', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     const { vehicleId } = req.params;
     if (!clerkId) return res.status(401).json({ error: 'Unauthorized' });
 

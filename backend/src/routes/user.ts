@@ -9,7 +9,7 @@ const router = Router();
 // POST /api/users/sync
 router.post('/sync', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     if (!clerkId) {
       return res.status(401).json({ error: 'Clerk User ID missing from token' });
     }
@@ -43,7 +43,7 @@ router.post('/sync', requireClerkAuth, async (req: AuthRequest, res: Response) =
 // POST /api/users/push-token
 router.post('/push-token', requireClerkAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const clerkId = req.auth?.userId;
+    const clerkId = req.auth().userId;
     if (!clerkId) {
       return res.status(401).json({ error: 'Clerk User ID missing from token' });
     }

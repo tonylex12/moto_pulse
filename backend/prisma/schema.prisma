@@ -65,6 +65,7 @@ enum AlertType {
   OIL_CHANGE
   BRAKE_PADS
   INSURANCE_RENEWAL
+  PREVENTIVE_MAINTENANCE
   CUSTOM
 }
 
@@ -74,16 +75,17 @@ enum TriggerType {
 }
 
 model MaintenanceAlert {
-  id           String      @id @default(uuid())
-  type         AlertType
-  title        String      // Custom description of the alert
-  triggerType  TriggerType
-  triggerValue String      // Odometer mileage target (e.g. "15000") OR Date target (e.g. "2026-12-05T00:00:00.000Z")
-  isCompleted  Boolean     @default(false)
-  vehicleId    String
-  vehicle      Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id                 String      @id @default(uuid())
+  type               AlertType
+  title              String      // Custom description of the alert
+  triggerType        TriggerType
+  triggerValue       String      // Odometer mileage target (e.g. "15000") OR Date target (e.g. "2026-12-05T00:00:00.000Z")
+  lastPerformedValue String?     // Odometer mileage or Date when it was last changed/performed
+  isCompleted        Boolean     @default(false)
+  vehicleId          String
+  vehicle            Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 }
 
 model SavedRoute {

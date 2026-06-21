@@ -36,6 +36,23 @@ export default function FuelLogsScreen() {
   const { showAlert } = useAlert();
   const { theme, colors } = useTheme();
   const activeBmwColor = theme === 'light' ? colors.bmwBlue : colors.bmwLightBlue;
+
+  const tftStyles = {
+    bezelBg: theme === "light" ? "#FFFFFF" : "#0F1216",
+    bezelBorder: theme === "light" ? "#D8E0EB" : "#242D3D",
+    screenBg: theme === "light" ? "#EBF0F5" : "#050709",
+    screenBorder: theme === "light" ? "#D8E0EB" : "#171B22",
+    headerBorder: theme === "light" ? "#D8E0EB" : "rgba(255,255,255,0.08)",
+    headerText: theme === "light" ? "#1C69D4" : "#00A3E0",
+    timeText: theme === "light" ? "#4E5E72" : "#8E9FBC",
+    textMain: theme === "light" ? "#002C5B" : "#FFFFFF",
+    textSec: theme === "light" ? "#4E5E72" : "#A0AEC0",
+    cardBg: theme === "light" ? "#FFFFFF" : "#121620",
+    cardBorder: theme === "light" ? "#D8E0EB" : "#242D3D",
+    // Accent colors
+    accentBlue: theme === "light" ? "#1C69D4" : "#00E5FF",
+    accentRed: colors.bmwRed,
+  };
   
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [logs, setLogs] = useState<FuelLog[]>([]);
@@ -62,23 +79,18 @@ export default function FuelLogsScreen() {
 
   const loadData = async () => {
     try {
-      // Changed to relative paths without leading slash
       const vehicleRes = await api.get('vehicles');
       const list = vehicleRes.data || [];
       if (list.length > 0) {
-        // Find the active vehicle dynamically
         const activeVehicle = list.find((v: any) => v.isActive) || list[0];
         setVehicle(activeVehicle);
 
-        // Fetch logs (relative paths)
         const logsRes = await api.get(`fuel-logs/vehicle/${activeVehicle.id}`);
         setLogs(logsRes.data);
 
-        // Fetch stats (relative paths)
         const statsRes = await api.get(`fuel-logs/stats/${activeVehicle.id}`);
         setStats(statsRes.data);
         
-        // Seed default odometer on form
         setOdometer(activeVehicle.currentMileage.toString());
       } else {
         setVehicle(null);
@@ -138,17 +150,14 @@ export default function FuelLogsScreen() {
         date: new Date(date).toISOString(),
       };
 
-      // Changed to relative paths without leading slash
       await api.post('fuel-logs', payload);
       showAlert('Combustible Registrado', 'Bitácora guardada y odómetro actualizado.');
       
-      // Reset form and close modal
       setNotes('');
       setLiters('');
       setPrice('');
       setModalVisible(false);
 
-      // Refresh list
       loadData();
     } catch (e: any) {
       console.error(e);
@@ -169,7 +178,6 @@ export default function FuelLogsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Changed to relative paths without leading slash
               await api.delete(`fuel-logs/${logId}`);
               loadData();
             } catch (e) {
@@ -194,82 +202,144 @@ export default function FuelLogsScreen() {
     <SafeAreaView className={`flex-1 ${colors.bg}`}>
       {/* Header */}
       <View
-        className="flex-row justify-between items-center px-6 py-4"
         style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingHorizontal: 24,
+          paddingVertical: 16,
           borderBottomWidth: 1,
           borderBottomColor: theme === "light" ? "#D8E0EB" : "#242D3D",
         }}
       >
-        <Text className={`font-orbitron text-lg font-bold tracking-wider uppercase ${colors.text}`}>
+        <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 18, color: tftStyles.textMain, letterSpacing: 2, textTransform: 'uppercase' }}>
           CONSUMO Y LOGS
         </Text>
         {vehicle && (
           <TouchableOpacity
             onPress={() => setModalVisible(true)}
-            className="flex-row items-center bg-[#1C69D4] rounded-lg px-3 py-1.5 border border-[#1C69D4]"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#1C69D4',
+              borderRadius: 20,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderWidth: 1,
+              borderColor: '#1C69D4',
+            }}
           >
-            <Plus size={16} color="#FFFFFF" />
-            <Text className="text-white font-bold text-xs uppercase tracking-wider ml-1">
-              LOGS
+            <Plus size={14} color="#FFFFFF" />
+            <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 11, color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: 1, marginLeft: 4 }}>
+              + LOGS
             </Text>
           </TouchableOpacity>
         )}
       </View>
 
       {!vehicle ? (
-        <View className="flex-grow justify-center items-center p-6">
-          <Fuel size={48} color={colors.bmwRed} />
-          <Text className={`text-center font-orbitron text-base font-bold mt-4 uppercase ${colors.text}`}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Fuel size={48} color={colors.bmwRed} style={{ marginBottom: 16 }} />
+          <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 16, color: tftStyles.textMain, textTransform: 'uppercase', letterSpacing: 1.5 }}>
             REGISTRA TU MOTO PRIMERO
           </Text>
-          <Text className={`${colors.textSec} text-center text-xs mt-1`}>
+          <Text style={{ fontFamily: 'BarlowCondensed-Medium', fontSize: 12, color: tftStyles.textSec, textAlign: 'center', marginTop: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             Debes registrar una moto en el Panel principal antes de guardar bitácoras de consumo.
           </Text>
         </View>
       ) : (
         <ScrollView
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          className="flex-grow p-6"
+          contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+          style={{ flex: 1 }}
         >
-          {/* Quick Metrics Cards Row */}
-          <View className="flex-row justify-between space-x-3 mb-6">
-            {/* Avg Consumption */}
-            <View className={`flex-1 ${colors.card} border ${colors.border} rounded-xl p-4 items-center`}>
-              <Activity size={20} color={colors.bmwBlue} />
-              <Text className={`${colors.textSec} text-xxs uppercase tracking-wider mt-1.5 mb-0.5`}>
-                Rendimiento
-              </Text>
-              <Text className={`${colors.text} font-orbitron text-base font-bold tracking-tight text-center`}>
-                {stats.avgConsumption > 0 ? `${stats.avgConsumption}` : '---'}{' '}
-                <Text className={`${colors.textSec} font-sans text-xs`}>km/L</Text>
-              </Text>
-            </View>
+          {/* BMW Motorrad Telemetry TFT Block */}
+          <View 
+            style={{ 
+              backgroundColor: tftStyles.bezelBg,
+              borderColor: tftStyles.bezelBorder,
+              borderWidth: 1,
+              borderRadius: 20,
+              padding: 4,
+              marginBottom: 24,
+            }}
+          >
+            <View 
+              style={{
+                backgroundColor: tftStyles.screenBg,
+                borderColor: tftStyles.screenBorder,
+                borderWidth: 1,
+                borderRadius: 16,
+                padding: 12,
+              }}
+            >
+              {/* Telemetry Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: tftStyles.headerBorder, paddingBottom: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  {/* Small Motorsport Tricolor Badge */}
+                  <View style={{ flexDirection: 'row', marginRight: 8 }}>
+                    <View style={{ width: 4, height: 8, backgroundColor: '#002C5B' }} />
+                    <View style={{ width: 4, height: 8, backgroundColor: '#00A3E0' }} />
+                    <View style={{ width: 4, height: 8, backgroundColor: '#E00000' }} />
+                  </View>
+                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 11, color: tftStyles.headerText, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                    M-SPORT TELEMETRÍA
+                  </Text>
+                </View>
+                <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 9, color: tftStyles.timeText, opacity: 0.8 }}>
+                  LOG-SYS V4.2
+                </Text>
+              </View>
 
-            {/* Total Spend */}
-            <View className={`flex-1 ${colors.card} border ${colors.border} rounded-xl p-4 items-center`}>
-              <DollarSign size={20} color={colors.bmwLightBlue} />
-              <Text className={`${colors.textSec} text-xxs uppercase tracking-wider mt-1.5 mb-0.5`}>
-                Gasto Total
-              </Text>
-              <Text className={`${colors.text} font-orbitron text-base font-bold tracking-tight text-center`}>
-                ${stats.totalCost.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-              </Text>
-            </View>
+              {/* Three Gauges Row */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
+                {/* Avg Consumption */}
+                <View style={{ flex: 1, backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620', borderColor: tftStyles.screenBorder, borderWidth: 0.5, borderRadius: 10, padding: 8, alignItems: 'center' }}>
+                  <Activity size={16} color={theme === 'light' ? '#1C69D4' : '#00A3E0'} style={{ marginBottom: 4 }} />
+                  <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 8, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
+                    RENDIMIENTO
+                  </Text>
+                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 16, color: tftStyles.textMain, letterSpacing: -0.5 }}>
+                    {stats.avgConsumption > 0 ? `${stats.avgConsumption}` : '---'}
+                  </Text>
+                  <Text style={{ fontFamily: 'BarlowCondensed-SemiBold', fontSize: 8, color: theme === 'light' ? '#1C69D4' : '#00E5FF', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 1 }}>
+                    KM / LITRO
+                  </Text>
+                </View>
 
-            {/* Cost Per Km */}
-            <View className={`flex-1 ${colors.card} border ${colors.border} rounded-xl p-4 items-center`}>
-              <Fuel size={20} color={colors.bmwRed} />
-              <Text className={`${colors.textSec} text-xxs uppercase tracking-wider mt-1.5 mb-0.5`}>
-                Costo / km
-              </Text>
-              <Text className={`${colors.text} font-orbitron text-base font-bold tracking-tight text-center`}>
-                ${stats.costPerKm > 0 ? `${stats.costPerKm}` : '---'}
-              </Text>
+                {/* Total Spend */}
+                <View style={{ flex: 1, backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620', borderColor: tftStyles.screenBorder, borderWidth: 0.5, borderRadius: 10, padding: 8, alignItems: 'center' }}>
+                  <DollarSign size={16} color={theme === 'light' ? '#1C69D4' : '#00A3E0'} style={{ marginBottom: 4 }} />
+                  <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 8, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
+                    GASTO TOTAL
+                  </Text>
+                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 16, color: tftStyles.textMain, letterSpacing: -0.5 }}>
+                    ${stats.totalCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
+                  </Text>
+                  <Text style={{ fontFamily: 'BarlowCondensed-SemiBold', fontSize: 8, color: theme === 'light' ? '#1C69D4' : '#00E5FF', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 1 }}>
+                    COP / USD
+                  </Text>
+                </View>
+
+                {/* Cost Per Km */}
+                <View style={{ flex: 1, backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620', borderColor: tftStyles.screenBorder, borderWidth: 0.5, borderRadius: 10, padding: 8, alignItems: 'center' }}>
+                  <Fuel size={16} color={colors.bmwRed} style={{ marginBottom: 4 }} />
+                  <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 8, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
+                    COSTO / KM
+                  </Text>
+                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 16, color: tftStyles.textMain, letterSpacing: -0.5 }}>
+                    ${stats.costPerKm > 0 ? `${stats.costPerKm}` : '---'}
+                  </Text>
+                  <Text style={{ fontFamily: 'BarlowCondensed-SemiBold', fontSize: 8, color: colors.bmwRed, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 1 }}>
+                    COSTO PROM
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
 
           {/* Logs History Title */}
-          <Text className={`${colors.textSec} font-bold text-xs uppercase tracking-widest mb-4`}>
+          <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 12, color: tftStyles.textSec, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>
             HISTORIAL DE CARGAS
           </Text>
 
@@ -278,12 +348,32 @@ export default function FuelLogsScreen() {
             logs.map((log) => (
               <View
                 key={log.id}
-                className={`${colors.card} border ${colors.border} rounded-xl p-4 mb-3 flex-row justify-between items-center`}
+                style={{
+                  backgroundColor: tftStyles.cardBg,
+                  borderColor: tftStyles.cardBorder,
+                  borderWidth: 1,
+                  borderRadius: 16,
+                  padding: 14,
+                  marginBottom: 14, // Spacing between cards to prevent them from sticking
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  borderLeftWidth: 4,
+                  borderLeftColor: theme === 'light' ? '#1C69D4' : '#00E5FF',
+                }}
               >
-                <View className="flex-1">
-                  <View className="flex-row items-center mb-1">
-                    <Calendar size={12} color={theme === 'light' ? '#4E5E72' : '#8F9CAE'} />
-                    <Text className={`${colors.textSec} text-xs ml-1`}>
+                <View style={{ flex: 1 }}>
+                  {/* Date & Icon */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                    <Calendar size={11} color={theme === 'light' ? '#1C69D4' : '#00E5FF'} />
+                    <Text style={{ 
+                      fontFamily: 'BarlowCondensed-Bold', 
+                      fontSize: 10, 
+                      color: tftStyles.textSec, 
+                      marginLeft: 5, 
+                      textTransform: 'uppercase',
+                      letterSpacing: 1
+                    }}>
                       {new Date(log.date).toLocaleDateString('es-ES', {
                         day: 'numeric',
                         month: 'short',
@@ -291,26 +381,87 @@ export default function FuelLogsScreen() {
                       })}
                     </Text>
                   </View>
-                  <Text className={`${colors.text} font-semibold text-sm`}>
-                    Carga de <Text className={`${theme === 'light' ? 'text-[#1C69D4]' : 'text-[#00A3E0]'} font-bold`}>{log.liters} L</Text> a los{' '}
-                    <Text className={`${theme === 'light' ? 'text-[#1C69D4]' : 'text-[#00A3E0]'} font-orbitron text-sm`}>{log.odometer.toLocaleString()} km</Text>
-                  </Text>
-                  {log.notes && <Text className={`${colors.textSec} text-xs italic mt-1`}>"{log.notes}"</Text>}
+                  
+                  {/* Main Details */}
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap' }}>
+                    <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 16, color: tftStyles.textMain }}>
+                      {log.liters} L
+                    </Text>
+                    <Text style={{ fontFamily: 'BarlowCondensed-Medium', fontSize: 10, color: tftStyles.textSec, marginLeft: 4, marginRight: 8, textTransform: 'uppercase' }}>
+                      CARGADOS
+                    </Text>
+                    
+                    <Text style={{ fontFamily: 'BarlowCondensed-Medium', fontSize: 10, color: tftStyles.textSec, marginRight: 4, textTransform: 'uppercase' }}>
+                      A LOS
+                    </Text>
+                    <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 12, color: theme === 'light' ? '#002C5B' : '#00E5FF', letterSpacing: 0.5 }}>
+                      {log.odometer.toLocaleString()}
+                    </Text>
+                    <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 10, color: theme === 'light' ? '#1C69D4' : '#00E5FF', marginLeft: 3 }}>
+                      KM
+                    </Text>
+                  </View>
+
+                  {/* Notes */}
+                  {log.notes && (
+                    <Text style={{ 
+                      fontFamily: 'BarlowCondensed-Medium', 
+                      fontSize: 11, 
+                      color: tftStyles.textSec, 
+                      fontStyle: 'italic', 
+                      marginTop: 6,
+                      opacity: 0.8 
+                    }}>
+                      📝 {log.notes}
+                    </Text>
+                  )}
                 </View>
-                
-                <View className="items-end space-y-2 ml-4">
-                  <Text className={`${colors.text} font-bold text-base`}>${log.price.toFixed(1)}</Text>
-                  <TouchableOpacity onPress={() => handleDeleteLog(log.id)} className="p-1">
-                    <Trash2 size={16} color={colors.bmwRed} />
+
+                {/* Right side: Price & Action */}
+                <View style={{ alignItems: 'flex-end', marginLeft: 16, gap: 10 }}>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 9, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      COSTO TOTAL
+                    </Text>
+                    <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 18, color: tftStyles.textMain, lineHeight: 22 }}>
+                      ${log.price.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                    </Text>
+                  </View>
+                  
+                  <TouchableOpacity 
+                    onPress={() => handleDeleteLog(log.id)} 
+                    style={{ 
+                      padding: 6,
+                      backgroundColor: theme === 'light' ? 'rgba(224, 0, 0, 0.06)' : 'rgba(224, 0, 0, 0.12)',
+                      borderRadius: 8,
+                      borderColor: colors.bmwRed,
+                      borderWidth: 0.5,
+                    }}
+                  >
+                    <Trash2 size={13} color={colors.bmwRed} />
                   </TouchableOpacity>
                 </View>
               </View>
             ))
           ) : (
-            <View className={`${colors.card} border ${colors.border} rounded-xl p-6 items-center`}>
-              <CheckCircle2 size={32} color={colors.bmwBlue} />
-              <Text className={`${colors.text} text-center mt-2 font-medium`}>Sin cargas registradas</Text>
-              <Text className={`${colors.textSec} text-center text-xs mt-1`}>Presiona "LOGS" para registrar tu primera recarga de combustible.</Text>
+            <View 
+              style={{
+                backgroundColor: tftStyles.cardBg,
+                borderColor: tftStyles.cardBorder,
+                borderWidth: 1,
+                borderRadius: 16,
+                padding: 24,
+                alignItems: 'center',
+                borderStyle: 'dashed',
+              }}
+            >
+              <Fuel size={28} color={theme === 'light' ? '#4E5E72' : '#8E9FBC'} style={{ opacity: 0.6, marginBottom: 8 }} />
+              <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 14, color: tftStyles.textMain, textTransform: 'uppercase', letterSpacing: 1 }}>
+                Sin cargas registradas
+              </Text>
+              <Text style={{ fontFamily: 'BarlowCondensed-Medium', fontSize: 11, color: tftStyles.textSec, textAlign: 'center', marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Presiona "+ LOGS" para registrar tu primera recarga de combustible.
+              </Text>
             </View>
           )}
         </ScrollView>
@@ -320,12 +471,17 @@ export default function FuelLogsScreen() {
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          className="flex-1"
+          style={{ flex: 1 }}
         >
-          <View className="flex-1 bg-black/60 justify-end">
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
             <View 
-              className={`${colors.card} border-t ${colors.border} rounded-t-3xl max-h-[85%]`}
               style={{
+                backgroundColor: tftStyles.cardBg,
+                borderTopWidth: 1,
+                borderTopColor: tftStyles.cardBorder,
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                maxHeight: '85%',
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: -10 },
                 shadowOpacity: theme === 'light' ? 0.05 : 0.4,
@@ -335,22 +491,22 @@ export default function FuelLogsScreen() {
             >
               <ScrollView 
                 contentContainerStyle={{ padding: 24, paddingBottom: 60 }}
-                className="w-full"
+                style={{ width: '100%' }}
                 keyboardShouldPersistTaps="handled"
               >
                 {/* Modal Header */}
-                <View className="flex-row justify-between items-center mb-6">
-                  <Text className={`font-orbitron text-lg font-bold uppercase tracking-wider ${colors.text}`}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 18, color: tftStyles.textMain, textTransform: 'uppercase', letterSpacing: 2 }}>
                     REGISTRAR CARGA
                   </Text>
-                  <TouchableOpacity onPress={() => setModalVisible(false)} className="p-1">
+                  <TouchableOpacity onPress={() => setModalVisible(false)} style={{ padding: 4 }}>
                     <X size={24} color={theme === 'light' ? '#002C5B' : '#F8F9FA'} />
                   </TouchableOpacity>
                 </View>
 
                 {/* Odometer */}
-                <View className="mb-4">
-                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 11, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
                     Odómetro Actual (km)
                   </Text>
                   <TextInput
@@ -359,14 +515,25 @@ export default function FuelLogsScreen() {
                     placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                     keyboardType="numeric"
                     onChangeText={setOdometer}
-                    className={`w-full ${colors.subCard} ${colors.text} ${colors.isDark ? 'border ' + colors.border : ''} rounded-xl px-4 py-3 text-sm`}
+                    style={{
+                      width: '100%',
+                      backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12',
+                      color: tftStyles.textMain,
+                      fontFamily: 'Rajdhani-SemiBold',
+                      fontSize: 14,
+                      borderRadius: 12,
+                      borderWidth: theme === 'light' ? 0 : 1,
+                      borderColor: tftStyles.cardBorder,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                    }}
                   />
                 </View>
 
                 {/* Liters & Price */}
-                <View className="mb-4 flex-row">
-                  <View className="flex-1 mr-2">
-                    <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
+                <View style={{ marginBottom: 16, flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 11, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
                       Litros Cargados
                     </Text>
                     <TextInput
@@ -375,12 +542,23 @@ export default function FuelLogsScreen() {
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       keyboardType="numeric"
                       onChangeText={setLiters}
-                      className={`w-full ${colors.subCard} ${colors.text} ${colors.isDark ? 'border ' + colors.border : ''} rounded-xl px-4 py-3 text-sm`}
+                      style={{
+                        width: '100%',
+                        backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12',
+                        color: tftStyles.textMain,
+                        fontFamily: 'Rajdhani-SemiBold',
+                        fontSize: 14,
+                        borderRadius: 12,
+                        borderWidth: theme === 'light' ? 0 : 1,
+                        borderColor: tftStyles.cardBorder,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                      }}
                     />
                   </View>
 
-                  <View className="flex-1 ml-2">
-                    <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 11, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
                       Costo Total ($)
                     </Text>
                     <TextInput
@@ -389,14 +567,25 @@ export default function FuelLogsScreen() {
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       keyboardType="numeric"
                       onChangeText={setPrice}
-                      className={`w-full ${colors.subCard} ${colors.text} ${colors.isDark ? 'border ' + colors.border : ''} rounded-xl px-4 py-3 text-sm`}
+                      style={{
+                        width: '100%',
+                        backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12',
+                        color: tftStyles.textMain,
+                        fontFamily: 'Rajdhani-SemiBold',
+                        fontSize: 14,
+                        borderRadius: 12,
+                        borderWidth: theme === 'light' ? 0 : 1,
+                        borderColor: tftStyles.cardBorder,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                      }}
                     />
                   </View>
                 </View>
 
                 {/* Date */}
-                <View className="mb-4">
-                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 11, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
                     Fecha
                   </Text>
                   <TextInput
@@ -404,13 +593,24 @@ export default function FuelLogsScreen() {
                     placeholder="YYYY-MM-DD"
                     placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                     onChangeText={setDate}
-                    className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-3 text-sm focus:border-[#1C69D4]`}
+                    style={{
+                      width: '100%',
+                      backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12',
+                      color: tftStyles.textMain,
+                      fontFamily: 'Rajdhani-SemiBold',
+                      fontSize: 14,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: tftStyles.cardBorder,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                    }}
                   />
                 </View>
 
                 {/* Notes */}
-                <View className="mb-6">
-                  <Text className={`${colors.textSec} text-xs uppercase mb-1.5 font-medium tracking-wide`}>
+                <View style={{ marginBottom: 24 }}>
+                  <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 11, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
                     Notas / Gasolinera
                   </Text>
                   <TextInput
@@ -418,7 +618,18 @@ export default function FuelLogsScreen() {
                     placeholder="Ej. Gasolinera Repsol, Aditivo añadido"
                     placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                     onChangeText={setNotes}
-                    className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-3 text-sm focus:border-[#1C69D4]`}
+                    style={{
+                      width: '100%',
+                      backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12',
+                      color: tftStyles.textMain,
+                      fontFamily: 'Rajdhani-SemiBold',
+                      fontSize: 14,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: tftStyles.cardBorder,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                    }}
                   />
                 </View>
 
@@ -426,8 +637,15 @@ export default function FuelLogsScreen() {
                 <TouchableOpacity
                   onPress={handleAddLog}
                   disabled={logging}
-                  className="w-full bg-[#1C69D4] rounded-xl py-3.5 items-center justify-center border border-[#1C69D4]"
                   style={{
+                    width: '100%',
+                    backgroundColor: '#1C69D4',
+                    borderRadius: 12,
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: '#1C69D4',
                     shadowColor: '#1C69D4',
                     shadowOffset: { width: 0, height: 0 },
                     shadowOpacity: 0.4,
@@ -438,7 +656,7 @@ export default function FuelLogsScreen() {
                   {logging ? (
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
-                    <Text className="text-white font-bold text-sm uppercase tracking-widest">
+                    <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 14, color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: 2 }}>
                       REGISTRAR REPOSTAJE
                     </Text>
                   )}
