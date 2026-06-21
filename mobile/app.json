@@ -8,12 +8,14 @@
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "dev.tonyhuerto.motopulse",
       "icon": "./assets/expo.icon",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "MotoPulse necesita acceder a tu ubicación para rastrear y grabar tus rutas en moto favoritas."
       }
     },
     "android": {
+      "package": "dev.tonyhuerto.motopulse",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
