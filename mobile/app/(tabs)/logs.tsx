@@ -1,10 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Modal, RefreshControl, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Plus, Fuel, DollarSign, Activity, Calendar, Trash2, X, CheckCircle2 } from 'lucide-react-native';
 import { api } from '../../utils/api';
 import { useAlert } from '../../utils/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
+
+const parseIsoDate = (dateStr: string) => {
+  if (!dateStr) return new Date();
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1; // 0-based
+    const day = parseInt(parts[2]);
+    return new Date(year, month, day);
+  }
+  return new Date(dateStr);
+};
+
+const formatIsoDate = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 interface Vehicle {
   id: string;
@@ -77,6 +97,7 @@ export default function FuelLogsScreen() {
   const [notes, setNotes] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [logging, setLogging] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const loadData = async () => {
     try {
@@ -86,10 +107,11 @@ export default function FuelLogsScreen() {
         const activeVehicle = list.find((v: any) => v.isActive) || list[0];
         setVehicle(activeVehicle);
 
-        const logsRes = await api.get(`fuel-logs/vehicle/${activeVehicle.id}`);
+        const [logsRes, statsRes] = await Promise.all([
+          api.get(`fuel-logs/vehicle/${activeVehicle.id}`),
+          api.get(`fuel-logs/stats/${activeVehicle.id}`)
+        ]);
         setLogs(logsRes.data);
-
-        const statsRes = await api.get(`fuel-logs/stats/${activeVehicle.id}`);
         setStats(statsRes.data);
         
         setOdometer(activeVehicle.currentMileage.toString());
@@ -152,14 +174,17 @@ export default function FuelLogsScreen() {
       };
 
       await api.post('fuel-logs', payload);
-      showAlert('Combustible Registrado', 'Bitácora guardada y odómetro actualizado.');
       
+      // Close the modal first, clear inputs, then load data and show success alert to prevent rendering flicker
+      setModalVisible(false);
       setNotes('');
       setLiters('');
       setPrice('');
-      setModalVisible(false);
 
-      loadData();
+      setTimeout(() => {
+        loadData();
+        showAlert('Combustible Registrado', 'Bitácora guardada y odómetro actualizado.');
+      }, 300);
     } catch (e: any) {
       console.error(e);
       showAlert('Error', e.response?.data?.error || 'No se pudo guardar la bitácora');
@@ -589,24 +614,45 @@ export default function FuelLogsScreen() {
                   <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 11, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
                     Fecha
                   </Text>
-                  <TextInput
-                    value={date}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
-                    onChangeText={setDate}
+                  <TouchableOpacity
+                    onPress={() => setShowDatePicker(true)}
                     style={{
                       width: '100%',
                       backgroundColor: theme === 'light' ? '#F4F5F7' : '#0A0D12',
-                      color: tftStyles.textMain,
-                      fontFamily: 'Rajdhani-SemiBold',
-                      fontSize: 14,
                       borderRadius: 12,
                       borderWidth: 1,
                       borderColor: tftStyles.cardBorder,
                       paddingHorizontal: 16,
                       paddingVertical: 12,
+                      justifyContent: 'center',
+                      height: 48,
                     }}
-                  />
+                  >
+                    <Text style={{ fontFamily: 'Rajdhani-SemiBold', fontSize: 14, color: tftStyles.textMain }}>
+                      {date ? parseIsoDate(date).toLocaleDateString('es-ES') : 'Seleccionar fecha'}
+                    </Text>
+                  </TouchableOpacity>
+                  {showDatePicker && (
+                    <DateTimePicker
+                      value={parseIsoDate(date)}
+                      mode="date"
+                      display="default"
+                      {...((Platform.OS === 'web'
+                        ? {
+                            onValueChange: (selectedDate: Date) => {
+                              setShowDatePicker(false);
+                              if (selectedDate) setDate(formatIsoDate(selectedDate));
+                            }
+                          }
+                        : {
+                            onChange: (event: any, selectedDate?: Date) => {
+                              setShowDatePicker(false);
+                              if (selectedDate) setDate(formatIsoDate(selectedDate));
+                            }
+                          }
+                      ) as any)}
+                    />
+                  )}
                 </View>
 
                 {/* Notes */}
