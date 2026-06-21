@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Modal, RefreshControl, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Plus, Bell, Calendar, Activity, Check, Trash2, X, ChevronDown, CheckCircle2 } from 'lucide-react-native';
 import { api } from '../../utils/api';
@@ -57,6 +57,7 @@ export default function AlertsScreen() {
   const { showAlert } = useAlert();
   const { theme, colors } = useTheme();
   const activeBmwColor = theme === 'light' ? colors.bmwBlue : colors.bmwLightBlue;
+  const insets = useSafeAreaInsets();
 
   const tftStyles = {
     bezelBg: theme === "light" ? "#FFFFFF" : "#0F1216",
@@ -559,7 +560,7 @@ export default function AlertsScreen() {
       {/* Add Alert Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
@@ -579,7 +580,7 @@ export default function AlertsScreen() {
               }}
             >
               <ScrollView 
-                contentContainerStyle={{ padding: 24, paddingBottom: 60 }}
+                contentContainerStyle={{ padding: 24, paddingBottom: insets.bottom > 0 ? insets.bottom + 30 : 60 }}
                 style={{ width: '100%' }}
                 keyboardShouldPersistTaps="handled"
               >

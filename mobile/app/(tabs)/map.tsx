@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT, UrlTile } from 'react-native-maps';
 import { WebView } from 'react-native-webview';
 import { Play, Square, Navigation, Bookmark, X, Eye, Trash2 } from 'lucide-react-native';
@@ -36,6 +36,7 @@ interface SavedRoute {
 export default function RoutesMapScreen() {
   const { showAlert } = useAlert();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const {
     currentLocation,
@@ -956,7 +957,7 @@ export default function RoutesMapScreen() {
       {/* Save Route Modal */}
       <Modal visible={saveModalVisible} animationType="slide" transparent={true}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
         >
           <View className="flex-1 bg-black/60 justify-end">
@@ -971,7 +972,7 @@ export default function RoutesMapScreen() {
               }}
             >
               <ScrollView 
-                contentContainerStyle={{ padding: 24, paddingBottom: 60 }}
+                contentContainerStyle={{ padding: 24, paddingBottom: insets.bottom > 0 ? insets.bottom + 30 : 60 }}
                 className="w-full"
                 keyboardShouldPersistTaps="handled"
               >
@@ -1078,8 +1079,12 @@ export default function RoutesMapScreen() {
       <Modal visible={routesModalVisible} animationType="slide" transparent={true}>
         <View className="flex-1 bg-black/60 justify-end">
           <View 
-            className={`${colors.card} border-t ${colors.border} rounded-t-3xl p-6 h-[70%]`}
+            className={`${colors.card} border-t ${colors.border} rounded-t-3xl h-[70%]`}
             style={{
+              paddingLeft: 24,
+              paddingRight: 24,
+              paddingTop: 24,
+              paddingBottom: insets.bottom > 0 ? insets.bottom + 12 : 24,
               shadowColor: '#000',
               shadowOffset: { width: 0, height: -10 },
               shadowOpacity: colors.isDark ? 0.4 : 0.1,
