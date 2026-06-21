@@ -1,27 +1,7 @@
-export interface VehicleSpecs {
-  tankSize: string | null;
-  frontBrake: string | null;
-  rearBrake: string | null;
-  frontSuspension: string | null;
-  rearSuspension: string | null;
-  frontTire: string | null;
-  rearTire: string | null;
-  engineCc: string | null;
-  power: string | null;
-  torque: string | null;
-  transmission: string | null;
-  weight: string | null;
-  seatHeight: string | null;
-}
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
-function decodeHtmlEntities(str: string): string {
+function decodeHtmlEntities(str) {
   return str
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;/g, "'")
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
     .replace(/&aacute;/g, 'á')
     .replace(/&eacute;/g, 'é')
     .replace(/&iacute;/g, 'í')
@@ -33,10 +13,16 @@ function decodeHtmlEntities(str: string): string {
     .replace(/&Iacute;/g, 'Í')
     .replace(/&Oacute;/g, 'Ó')
     .replace(/&Uacute;/g, 'Ú')
-    .replace(/&Ntilde;/g, 'Ñ');
+    .replace(/&Ntilde;/g, 'Ñ')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
 }
 
-async function fetchSnippetsFromDDG(queryText: string): Promise<string[]> {
+async function fetchSnippetsFromDDG(queryText) {
   const query = encodeURIComponent(queryText);
   const url = `https://html.duckduckgo.com/html/?q=${query}`;
   try {
@@ -48,7 +34,7 @@ async function fetchSnippetsFromDDG(queryText: string): Promise<string[]> {
     if (!response.ok) return [];
     
     const html = await response.text();
-    const snippets: string[] = [];
+    const snippets = [];
     const snippetRegex = /<a class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
     let match;
     while ((match = snippetRegex.exec(html)) !== null) {
@@ -61,13 +47,13 @@ async function fetchSnippetsFromDDG(queryText: string): Promise<string[]> {
       snippets.push(text);
     }
     return snippets;
-  } catch (e: any) {
-    console.warn(`⚠️ DuckDuckGo search failed: ${e.message}`);
+  } catch (e) {
+    console.warn(`DDG fetch failed:`, e.message);
     return [];
   }
 }
 
-async function fetchSnippetsFromYahoo(queryText: string): Promise<string[]> {
+async function fetchSnippetsFromYahoo(queryText) {
   const query = encodeURIComponent(queryText);
   const url = `https://search.yahoo.com/search?p=${query}`;
   try {
@@ -79,9 +65,7 @@ async function fetchSnippetsFromYahoo(queryText: string): Promise<string[]> {
     if (!response.ok) return [];
     
     const html = await response.text();
-    const snippets: string[] = [];
-    
-    // Yahoo search snippets are inside <p class="...fc-dustygray..."> or <div class="...compText...">
+    const snippets = [];
     const pRegex = /<p class="[^"]*fc-dustygray[^"]*"[^>]*>([\s\S]*?)<\/p>/gi;
     let match;
     while ((match = pRegex.exec(html)) !== null) {
@@ -91,36 +75,61 @@ async function fetchSnippetsFromYahoo(queryText: string): Promise<string[]> {
           .replace(/\s+/g, ' ')
           .trim()
       );
-      if (text.length > 10) snippets.push(text);
+      if (text.length > 10) {
+        snippets.push(text);
+      }
     }
-
-    const divRegex = /<div class="[^"]*compText[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
-    divRegex.lastIndex = 0;
-    while ((match = divRegex.exec(html)) !== null) {
-      const text = decodeHtmlEntities(
-        match[1]
-          .replace(/<[^>]*>/g, '')
-          .replace(/\s+/g, ' ')
-          .trim()
-      );
-      if (text.length > 10 && !snippets.includes(text)) snippets.push(text);
-    }
-
     return snippets;
-  } catch (e: any) {
-    console.warn(`⚠️ Yahoo search fallback failed: ${e.message}`);
+  } catch (e) {
+    console.warn(`Yahoo fetch failed:`, e.message);
     return [];
   }
 }
 
-function getLocalContext(snippet: string, matchIndex: number, matchLength: number, windowSize = 60): string {
+async function test() {
+  const cases = [
+    { brand: 'Honda', model: 'NX 190', year: 2026 },
+    { brand: 'Yamaha', model: 'FZ25', year: 2024 },
+    { brand: 'Honda', model: 'CB190R', year: 2023 }
+  ];
+
+  for (const c of cases) {
+    console.log(`\n========================================`);
+    console.log(`TEST CASE: ${c.brand} ${c.model} ${c.year}`);
+    console.log(`========================================`);
+    
+    const queryText = `${c.brand} ${c.model} ${c.year} ficha tecnica especificaciones`;
+    
+    // Try DDG first
+    let snippets = await fetchSnippetsFromDDG(queryText);
+    console.log(`Fetched ${snippets.length} snippets from DDG.`);
+    
+    // Fallback to Yahoo if DDG returned nothing
+    if (snippets.length === 0) {
+      console.log(`DDG returned 0 results (possibly rate-limited). Falling back to Yahoo...`);
+      snippets = await fetchSnippetsFromYahoo(queryText);
+      console.log(`Fetched ${snippets.length} snippets from Yahoo.`);
+    }
+
+    snippets.forEach((s, i) => console.log(`  Snippet [${i}]: ${s}`));
+    
+    const specs = extractSpecsWithScoring(snippets);
+    console.log('Parsed specs:');
+    console.log(JSON.stringify(specs, null, 2));
+    
+    // Delay to avoid Yahoo/DDG rate limit
+    await new Promise(resolve => setTimeout(resolve, 2500));
+  }
+}
+
+function getLocalContext(snippet, matchIndex, matchLength, windowSize = 60) {
   const start = Math.max(0, matchIndex - windowSize);
   const end = Math.min(snippet.length, matchIndex + matchLength + windowSize);
   return snippet.substring(start, end).toLowerCase();
 }
 
-function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
-  const specs: VehicleSpecs = {
+function extractSpecsWithScoring(snippetsList) {
+  const specs = {
     engineCc: null,
     power: null,
     torque: null,
@@ -136,11 +145,9 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
     rearTire: null
   };
 
-  if (snippetsList.length === 0) return specs;
-
   // --- 1. TANK SIZE ---
-  const tankCandidates: { value: string; score: number }[] = [];
-  const tankRegex = /(\b\d+(?:[\.,]\d+)?)\s*(?:litros|litro|lts|l|gal|galones)\b/gi;
+  let tankCandidates = [];
+  const tankRegex = /(\b\d+(?:[\.,]\d+)?)\s*(?:litros|litro|l|gal|galones)\b/gi;
   snippetsList.forEach(snippet => {
     let match;
     const cleanSnippet = snippet.toLowerCase();
@@ -199,8 +206,8 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
   }
 
   // --- 2. TORQUE ---
-  const torqueCandidates: { value: string; score: number }[] = [];
-  const torqueRegex = /(\b\d+(?:[\.,]\d+)?)\s*(?:nm|n\.m|n-m|n\s*-\s*m|kgm|kgf\.?m|kgf-m)\b/gi;
+  let torqueCandidates = [];
+  const torqueRegex = /(\b\d+(?:[\.,]\d+)?)\s*(?:nm|n\.m|kgm|kgf\.?m)\b/gi;
   snippetsList.forEach(snippet => {
     let match;
     const cleanSnippet = snippet.toLowerCase();
@@ -219,7 +226,7 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
         score += 15;
       }
 
-      if (unit.includes('nm') || unit.includes('n-m') || unit.includes('n.m')) {
+      if (unit.includes('nm')) {
         score += 10;
         if (val >= 5 && val <= 200) score += 15;
       } else if (unit.includes('kg')) {
@@ -239,7 +246,7 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
   }
 
   // --- 3. POWER ---
-  const powerCandidates: { value: string; score: number }[] = [];
+  let powerCandidates = [];
   const powerRegex = /(\b\d+(?:[\.,]\d+)?)\s*(?:hp|cv|kw|caballos|bhp)\b/gi;
   snippetsList.forEach(snippet => {
     let match;
@@ -275,11 +282,12 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
   }
 
   // --- 4. ENGINE CC ---
-  const engineCandidates: { value: string; score: number }[] = [];
+  let engineCandidates = [];
   const ccRegex = /(\b\d+(?:[\.,]\d+)?)\s*(?:cc|c\.c\.|cm3)\b/gi;
   const ccLabelRegex = /(?:cilindrada|motor)\s*(?:de|:)?\s*(\b\d{2,4})\b/gi;
   snippetsList.forEach(snippet => {
     let match;
+    const cleanSnippet = snippet.toLowerCase();
     
     ccRegex.lastIndex = 0;
     while ((match = ccRegex.exec(snippet)) !== null) {
@@ -305,11 +313,12 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
   }
 
   // --- 5. WEIGHT ---
-  const weightCandidates: { value: string; score: number }[] = [];
-  const weightRegex = /(\b\d+(?:[\.,]\d+)?)\s*(?:kg|kgs|kilos|kilogramos)\b/gi;
+  let weightCandidates = [];
+  const weightRegex = /(\b\d+(?:[\.,]\d+)?)\s*(?:kg|kilos|kilogramos)\b/gi;
   const weightLabelRegex = /peso\s*(?:de|:)?\s*(\b\d+(?:[\.,]\d+)?)\b/gi;
   snippetsList.forEach(snippet => {
     let match;
+    const cleanSnippet = snippet.toLowerCase();
 
     weightRegex.lastIndex = 0;
     while ((match = weightRegex.exec(snippet)) !== null) {
@@ -339,19 +348,15 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
   }
 
   // --- 6. SEAT HEIGHT ---
-  const seatHeightCandidates: { value: string; score: number }[] = [];
-  const seatHeightRegex = /(\b\d{2,3})\s*(?:mm|cm)\b/gi;
+  let seatHeightCandidates = [];
+  const mmRegex = /(\b\d{3})\s*mm\b/gi;
   snippetsList.forEach(snippet => {
     let match;
     const cleanSnippet = snippet.toLowerCase();
-    seatHeightRegex.lastIndex = 0;
-    while ((match = seatHeightRegex.exec(snippet)) !== null) {
-      let val = parseInt(match[1], 10);
+    mmRegex.lastIndex = 0;
+    while ((match = mmRegex.exec(snippet)) !== null) {
+      const val = parseInt(match[1], 10);
       if (isNaN(val)) continue;
-      const unit = match[0].toLowerCase();
-      if (unit.includes('cm')) {
-        val = val * 10;
-      }
 
       let score = 0;
       const localCtx = getLocalContext(snippet, match.index, match[0].length, 50);
@@ -377,7 +382,7 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
       }
 
       seatHeightCandidates.push({
-        value: val + ' mm',
+        value: match[1] + ' mm',
         score: score
       });
     }
@@ -390,8 +395,9 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
   }
 
   // --- 7. TRANSMISSION ---
-  const transCandidates: { value: string; score: number }[] = [];
+  let transCandidates = [];
   snippetsList.forEach(snippet => {
+    const cleanSnippet = snippet.toLowerCase();
     let match;
     
     const transRegex1 = /(semi-automatica|automatica|mecanica|manual)/gi;
@@ -412,7 +418,7 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
   }
 
   // --- 8 & 9. BRAKES ---
-  const brakeCandidates: { value: string; index: number; localCtx: string }[] = [];
+  let brakeCandidates = [];
   const brakeRegex = /(disco\s*(?:ventilado|lobulado|doble)?(?:\s*de\s*\d+\s*mm)?|tambor)/gi;
   snippetsList.forEach(snippet => {
     let match;
@@ -448,8 +454,8 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
   }
 
   // --- 10 & 11. SUSPENSIONS ---
-  const suspensionCandidates: { value: string; localCtx: string }[] = [];
-  const suspRegex = /(horquilla\s*(?:telescopica|invertida|telescópica)?|barras\s*invertidas|amortiguador\s*delantero|suspension\s*delantera|suspensión\s*delantera|monoshock|monoamortiguador|doble\s*amortiguador|suspension\s*trasera|suspensión\s*trasera)/gi;
+  let suspensionCandidates = [];
+  const suspRegex = /(horquilla\s*(?:telescopica|invertida|telescópica)?|amortiguador\s*delantero|suspension\s*delantera|suspensión\s*delantera|monoshock|monoamortiguador|doble\s*amortiguador|suspension\s*trasera|suspensión\s*trasera)/gi;
   snippetsList.forEach(snippet => {
     let match;
     suspRegex.lastIndex = 0;
@@ -465,7 +471,7 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
   if (suspensionCandidates.length > 0) {
     const frontSusp = suspensionCandidates.map(c => {
       let score = 0;
-      if (c.value.toLowerCase().includes('horquilla') || c.value.toLowerCase().includes('barras') || c.value.toLowerCase().includes('delantera') || c.localCtx.includes('delantero') || c.localCtx.includes('delantera') || c.localCtx.includes('front')) score += 20;
+      if (c.value.toLowerCase().includes('horquilla') || c.value.toLowerCase().includes('delantera') || c.localCtx.includes('delantero') || c.localCtx.includes('delantera') || c.localCtx.includes('front')) score += 20;
       if (c.value.toLowerCase().includes('monoshock') || c.value.toLowerCase().includes('trasera') || c.localCtx.includes('trasero') || c.localCtx.includes('trasera') || c.localCtx.includes('rear')) score -= 20;
       return { value: c.value, score };
     }).sort((a, b) => b.score - a.score);
@@ -481,7 +487,7 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
   }
 
   // --- 12 & 13. TIRES ---
-  const tireCandidates: { value: string; index: number; localCtx: string }[] = [];
+  let tireCandidates = [];
   const tireRegex = /(\d{2,3}\/\d{2,3}[-\s]*\d{2})/gi;
   snippetsList.forEach(snippet => {
     let match;
@@ -524,36 +530,4 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
   return specs;
 }
 
-/**
- * Searches DuckDuckGo HTML interface (and falls back to Yahoo Search)
- * and extracts technical specifications using rule-based scoring.
- * This is 100% keyless, reliable, and does not require an AI API key.
- */
-export async function fetchVehicleSpecs(brand: string, model: string, year: number): Promise<VehicleSpecs | null> {
-  const queryText = `${brand} ${model} ${year} ficha tecnica especificaciones`;
-  
-  console.log(`🔍 Scraping specs search results for: ${queryText}...`);
-
-  // 1. Try DuckDuckGo first
-  let snippets = await fetchSnippetsFromDDG(queryText);
-  
-  // 2. Fall back to Yahoo if DuckDuckGo is blocked or empty
-  if (snippets.length === 0) {
-    console.log(`⚠️ DDG returned 0 results. Falling back to Yahoo Search...`);
-    snippets = await fetchSnippetsFromYahoo(queryText);
-  }
-
-  console.log(`🤖 Found ${snippets.length} web text snippets to parse.`);
-  if (snippets.length === 0) {
-    return null;
-  }
-
-  try {
-    const specs = extractSpecsWithScoring(snippets);
-    console.log('🤖 Web scraper successfully parsed specs:', JSON.stringify(specs, null, 2));
-    return specs;
-  } catch (error) {
-    console.error('Error during scraping specs:', error);
-    return null;
-  }
-}
+test();
