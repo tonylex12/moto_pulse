@@ -99,6 +99,8 @@ export default function RoutesMapScreen() {
   const [playbackSpeed, setPlaybackSpeed] = useState(0);
   const [playbackLean, setPlaybackLean] = useState(0);
   const [isPlayingVideo, setIsPlayingVideo] = useState(false);
+  const [playbackTime, setPlaybackTime] = useState(0);
+  const [playbackDuration, setPlaybackDuration] = useState(0);
 
   // Refs for camera video state to avoid stale closures in handleSaveRoute
   const isRecordingVideoRef = useRef(false);
@@ -124,6 +126,10 @@ export default function RoutesMapScreen() {
 
     const timeUpdateSub = videoPlayer.addListener('timeUpdate', (event) => {
       const time = event.currentTime;
+      setPlaybackTime(time);
+      if (videoPlayer.duration && videoPlayer.duration !== playbackDuration) {
+        setPlaybackDuration(videoPlayer.duration);
+      }
       if (playbackRoute && playbackRoute.coordinates && playbackRoute.coordinates.length > 0) {
         const coords = playbackRoute.coordinates as Coordinate[];
         
@@ -916,7 +922,10 @@ export default function RoutesMapScreen() {
         )}
 
         {/* Dashboard floating HUD */}
-        <View className="absolute top-4 left-4 right-36 flex-row items-center z-10 pointer-events-none">
+        <View 
+          className="absolute top-4 left-4 right-36 flex-row items-center z-10"
+          pointerEvents="box-none"
+        >
           {isRecording ? (
             <View 
               className={`${colors.card}/95 border border-red-500 rounded-xl p-3 flex-row items-center space-x-4 pointer-events-auto`}
@@ -1369,6 +1378,8 @@ export default function RoutesMapScreen() {
                                 setPlaybackRoute(route);
                                 setPlaybackSpeed(0);
                                 setPlaybackLean(0);
+                                setPlaybackTime(0);
+                                setPlaybackDuration(0);
                                 if (videoPlayer && videoUri) {
                                   try {
                                     videoPlayer.replace(videoUri);
@@ -1539,7 +1550,7 @@ export default function RoutesMapScreen() {
               <View className="flex-1 mx-4 h-1.5 bg-white/20 rounded-full overflow-hidden justify-center">
                 <View 
                   style={{ 
-                    width: `${videoPlayer.duration > 0 ? (videoPlayer.currentTime / videoPlayer.duration) * 100 : 0}%`,
+                    width: `${playbackDuration > 0 ? (playbackTime / playbackDuration) * 100 : 0}%`,
                     height: '100%',
                     backgroundColor: '#00A3E0'
                   }} 
@@ -1548,7 +1559,7 @@ export default function RoutesMapScreen() {
 
               {/* Timing info */}
               <Text className="text-white font-orbitron text-2xs">
-                {formatTime(videoPlayer.currentTime)} / {formatTime(videoPlayer.duration)}
+                {formatTime(playbackTime)} / {formatTime(playbackDuration)}
               </Text>
             </View>
           </View>

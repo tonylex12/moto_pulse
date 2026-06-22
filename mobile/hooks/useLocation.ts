@@ -135,27 +135,11 @@ export const useLocation = (currentLean?: number) => {
         const currentTimestamp = location.timestamp;
         const relativeTime = startTimeRef.current ? (currentTimestamp - startTimeRef.current) / 1000 : 0;
         
-        let calculatedSpeedKmh = 0;
-
-        // 1. Try to use GPS speed from coords (if positive and valid)
+        // Directly use the OS/sensor speed from coordinates (converted from m/s to km/h)
         const gpsSpeed = location.coords.speed;
-        if (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed > 0) {
-          calculatedSpeedKmh = gpsSpeed * 3.6;
-        } 
-        // 2. Fallback: Calculate speed manually using distance and time from last coordinate
-        else if (lastLocationRef.current) {
-          const timeDiffSec = (currentTimestamp - lastLocationRef.current.timestamp) / 1000;
-          if (timeDiffSec > 0.5 && timeDiffSec < 10) { // Limit to sensible time gap
-            const dist = getDistanceBetweenPoints(lastLocationRef.current, {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            });
-            calculatedSpeedKmh = (dist / timeDiffSec) * 3600;
-          }
-        }
-
-        // Apply a threshold/deadband to filter out noise when stationary (minimum 1.8 km/h / 0.5 m/s)
-        const speedKmh = calculatedSpeedKmh >= 1.8 ? Math.round(calculatedSpeedKmh) : 0;
+        const speedKmh = (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed > 0) 
+          ? Math.round(gpsSpeed * 3.6) 
+          : 0;
         setSpeed(speedKmh);
 
         const newCoord: Coordinate = {
