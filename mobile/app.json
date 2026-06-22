@@ -25,7 +25,9 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
         "RECORD_AUDIO",
         "CAMERA",
         "WRITE_EXTERNAL_STORAGE",
@@ -65,7 +67,14 @@
           "savePhotosPermission": "MotoPulse necesita acceder a tu galería para guardar los videos de tus rutas."
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
