@@ -1467,8 +1467,15 @@ export default function RoutesMapScreen() {
           {/* Centered Horizon indicator overlay (just empty flex spacer for layout) */}
           <View className="flex-1 justify-center items-center pointer-events-none" />
 
-          {/* Bottom Bar: Telemetry gauges and controls */}
-          <View className="w-full bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6 z-10">
+          {/* Bottom Bar: Telemetry gauges and controls (using insets.bottom to prevent navbar overlap) */}
+          <View 
+            className="w-full bg-gradient-to-t from-black/90 via-black/60 to-transparent z-10"
+            style={{ 
+              paddingHorizontal: 24,
+              paddingTop: 24,
+              paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24
+            }}
+          >
             {/* Speed and Lean HUD (BMW TFT style overlay) */}
             <View className="flex-row justify-around items-center mb-6">
               {/* Speedometer */}
