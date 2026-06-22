@@ -372,14 +372,36 @@ export default function RoutesMapScreen() {
         setIsRecordingVideo(true);
         cameraRef.current.recordAsync().then(async (file) => {
           if (file && file.uri) {
-            if (MediaLibrary && typeof MediaLibrary.saveToLibraryAsync === 'function') {
+            let savedToGallery = false;
+            if (MediaLibrary) {
               try {
-                await MediaLibrary.saveToLibraryAsync(file.uri);
-                showAlert('Video Guardado', 'El video de tu ruta se ha guardado en tu galería.');
+                // 1. Try class-based modern SDK 56 API: MediaLibrary.Asset.create
+                if (MediaLibrary.Asset && typeof MediaLibrary.Asset.create === 'function') {
+                  await MediaLibrary.Asset.create(file.uri);
+                  savedToGallery = true;
+                } 
+                // 2. Try the legacy package if imported or if we can require it dynamically
+                else {
+                  let legacyMediaLibrary = null;
+                  try {
+                    legacyMediaLibrary = require('expo-media-library/legacy');
+                  } catch (err) {}
+                  
+                  if (legacyMediaLibrary && typeof legacyMediaLibrary.saveToLibraryAsync === 'function') {
+                    await legacyMediaLibrary.saveToLibraryAsync(file.uri);
+                    savedToGallery = true;
+                  } else if (legacyMediaLibrary && typeof legacyMediaLibrary.createAssetAsync === 'function') {
+                    await legacyMediaLibrary.createAssetAsync(file.uri);
+                    savedToGallery = true;
+                  }
+                }
               } catch (saveErr) {
                 console.error('Failed to save to gallery:', saveErr);
-                showAlert('Ruta Finalizada', `Grabación guardada localmente: ${file.uri}`);
               }
+            }
+
+            if (savedToGallery) {
+              showAlert('Video Guardado', 'El video de tu ruta se ha guardado en tu galería.');
             } else {
               showAlert('Ruta Finalizada', `Grabación guardada localmente: ${file.uri}`);
             }
