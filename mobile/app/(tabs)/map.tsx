@@ -100,6 +100,18 @@ export default function RoutesMapScreen() {
   const [playbackLean, setPlaybackLean] = useState(0);
   const [isPlayingVideo, setIsPlayingVideo] = useState(false);
 
+  // Refs for camera video state to avoid stale closures in handleSaveRoute
+  const isRecordingVideoRef = useRef(false);
+  const recordedVideoUriRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    isRecordingVideoRef.current = isRecordingVideo;
+  }, [isRecordingVideo]);
+
+  useEffect(() => {
+    recordedVideoUriRef.current = recordedVideoUri;
+  }, [recordedVideoUri]);
+
   // Initialize Video Player for playback
   const videoPlayer = useVideoPlayer(playbackVideoUri, (player) => {
     player.loop = false;
@@ -594,6 +606,16 @@ export default function RoutesMapScreen() {
 
     setSaving(true);
     try {
+      // If camera is active and we are still processing/recording video, wait for it to finish saving
+      if (cameraModeActive && isRecordingVideoRef.current) {
+        let attempts = 0;
+        // Loop check every 500ms for up to 15 seconds
+        while (isRecordingVideoRef.current && attempts < 30) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          attempts++;
+        }
+      }
+
       const payload = {
         name: routeName.trim(),
         coordinates: recordedRoute,
@@ -609,10 +631,11 @@ export default function RoutesMapScreen() {
       // Changed to relative path without leading slash
       const res = await api.post('routes', payload);
       const savedRoute = res.data;
-      if (savedRoute && savedRoute.id && recordedVideoUri) {
+      const videoUri = recordedVideoUriRef.current;
+      if (savedRoute && savedRoute.id && videoUri) {
         try {
-          await AsyncStorage.setItem(`route_video_${savedRoute.id}`, recordedVideoUri);
-          setRouteVideos(prev => ({ ...prev, [savedRoute.id]: recordedVideoUri }));
+          await AsyncStorage.setItem(`route_video_${savedRoute.id}`, videoUri);
+          setRouteVideos(prev => ({ ...prev, [savedRoute.id]: videoUri }));
         } catch (storageErr) {
           console.error('Failed to link video in AsyncStorage:', storageErr);
         }
@@ -1231,20 +1254,27 @@ export default function RoutesMapScreen() {
 
                 <TouchableOpacity
                   onPress={handleSaveRoute}
-                  disabled={saving}
+                  disabled={saving || (cameraModeActive && isRecordingVideo)}
                   className="w-full rounded-xl py-3.5 items-center justify-center border"
                   style={{
-                    backgroundColor: colors.bmwBlue,
-                    borderColor: colors.bmwBlue,
-                    shadowColor: colors.bmwBlue,
+                    backgroundColor: (saving || (cameraModeActive && isRecordingVideo)) ? '#8F9CAE' : colors.bmwBlue,
+                    borderColor: (saving || (cameraModeActive && isRecordingVideo)) ? '#8F9CAE' : colors.bmwBlue,
+                    shadowColor: (saving || (cameraModeActive && isRecordingVideo)) ? 'transparent' : colors.bmwBlue,
                     shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.3,
+                    shadowOpacity: (saving || (cameraModeActive && isRecordingVideo)) ? 0 : 0.3,
                     shadowRadius: 8,
                     elevation: 4
                   }}
                 >
                   {saving ? (
                     <ActivityIndicator color="#FFFFFF" />
+                  ) : cameraModeActive && isRecordingVideo ? (
+                    <View className="flex-row items-center justify-center" style={{ gap: 8 }}>
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                      <Text className="text-white font-bold text-sm uppercase tracking-widest">
+                        Procesando Video...
+                      </Text>
+                    </View>
                   ) : (
                     <Text className="text-white font-bold text-sm uppercase tracking-widest">
                       GUARDAR EN HISTORIAL
@@ -1333,11 +1363,15 @@ export default function RoutesMapScreen() {
                           {routeVideos[route.id] && (
                             <TouchableOpacity
                               onPress={() => {
+                                const videoUri = routeVideos[route.id];
                                 setRoutesModalVisible(false);
-                                setPlaybackVideoUri(routeVideos[route.id]);
+                                setPlaybackVideoUri(videoUri);
                                 setPlaybackRoute(route);
                                 setPlaybackSpeed(0);
                                 setPlaybackLean(0);
+                                if (videoPlayer && videoUri) {
+                                  videoPlayer.replace(videoUri);
+                                }
                                 setPlaybackModalVisible(true);
                                 // Play automatically after modal animation
                                 setTimeout(() => {
@@ -1405,6 +1439,9 @@ export default function RoutesMapScreen() {
             <TouchableOpacity 
               onPress={() => {
                 videoPlayer.pause();
+                if (videoPlayer) {
+                  videoPlayer.replace(null);
+                }
                 setPlaybackModalVisible(false);
                 setPlaybackVideoUri(null);
                 setPlaybackRoute(null);
