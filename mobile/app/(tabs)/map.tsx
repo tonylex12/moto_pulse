@@ -75,6 +75,19 @@ export default function RoutesMapScreen() {
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
   const cameraRef = useRef<CameraView | null>(null);
 
+  // Defensive camera recording cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      if (cameraRef.current) {
+        try {
+          cameraRef.current.stopRecording();
+        } catch (e) {
+          // Ignore
+        }
+      }
+    };
+  }, []);
+
   // Video Playback overlay state linked to AsyncStorage
   const [recordedVideoUri, setRecordedVideoUri] = useState<string | null>(null);
   const [routeVideos, setRouteVideos] = useState<Record<string, string>>({});
@@ -140,6 +153,11 @@ export default function RoutesMapScreen() {
   const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
 
   const handleToggleCameraMode = async () => {
+    if (isRecording || isRecordingVideo) {
+      showAlert('Modo Cámara', 'No puedes cambiar el modo de cámara mientras se graba la ruta o se procesa el video.');
+      return;
+    }
+
     if (!cameraModeActive) {
       let camGranted = cameraPermission?.granted;
       if (!camGranted) {
@@ -185,6 +203,15 @@ export default function RoutesMapScreen() {
 
       setCameraModeActive(true);
     } else {
+      // Defensively stop any recording before disabling camera mode
+      if (cameraRef.current) {
+        try {
+          cameraRef.current.stopRecording();
+        } catch (err) {
+          console.warn('Failed to stop recording on camera mode toggle off:', err);
+        }
+      }
+      setIsRecordingVideo(false);
       setCameraModeActive(false);
     }
   };
@@ -524,12 +551,14 @@ export default function RoutesMapScreen() {
           }
           setIsRecordingVideo(false);
         }).catch((err) => {
-          console.error('Error recording video:', err);
+          console.warn('Error recording video:', err);
           setIsRecordingVideo(false);
+          showAlert('Error de Grabación', 'No se pudo iniciar o guardar la grabación de video.');
         });
       } catch (err) {
-        console.error('Failed to start camera recording:', err);
+        console.warn('Failed to start camera recording:', err);
         setIsRecordingVideo(false);
+        showAlert('Error de Grabación', 'No se pudo iniciar la grabación de video.');
       }
     }
 
@@ -538,8 +567,12 @@ export default function RoutesMapScreen() {
 
   // Stop route capture
   const handleStopTracking = () => {
-    if (cameraModeActive && cameraRef.current && isRecordingVideo) {
-      cameraRef.current.stopRecording();
+    if (cameraModeActive && cameraRef.current) {
+      try {
+        cameraRef.current.stopRecording();
+      } catch (err) {
+        console.warn('Defensive stopRecording in handleStopTracking failed:', err);
+      }
     }
     stopRecording();
     if (recordedRoute.length < 2) {

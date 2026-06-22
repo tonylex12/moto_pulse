@@ -46,9 +46,13 @@ export const useLocation = (currentLean?: number) => {
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const lastLocationRef = useRef<{ latitude: number; longitude: number; timestamp: number } | null>(null);
 
-  // Ask for foreground permissions and get initial position
-  const requestPermissions = async () => {
+  // Quick check and request of permissions without fetching current position (instantaneous)
+  const checkAndRequestPermissions = async () => {
     try {
+      const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+      if (existingStatus === 'granted') {
+        return true;
+      }
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setErrorMsg('Location permission denied');
@@ -58,6 +62,18 @@ export const useLocation = (currentLean?: number) => {
         );
         return false;
       }
+      return true;
+    } catch (e) {
+      console.error('Error checking permissions:', e);
+      return false;
+    }
+  };
+
+  // Ask for foreground permissions and get initial position (slower, queries GPS hardware for initial center)
+  const requestPermissions = async () => {
+    try {
+      const hasPermission = await checkAndRequestPermissions();
+      if (!hasPermission) return false;
 
       let loc = null;
       try {
@@ -97,7 +113,7 @@ export const useLocation = (currentLean?: number) => {
 
   // Start route recording
   const startRecording = async () => {
-    const hasPermission = await requestPermissions();
+    const hasPermission = await checkAndRequestPermissions();
     if (!hasPermission) return;
 
     setIsRecording(true);
