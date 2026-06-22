@@ -8,7 +8,7 @@ const router = Router();
 const coordinateSchema = z.object({
   latitude: z.number(),
   longitude: z.number(),
-});
+}).passthrough();
 
 const routeSchema = z.object({
   name: z.string().min(1, 'Route name is required'),

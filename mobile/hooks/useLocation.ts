@@ -5,6 +5,9 @@ import * as Location from 'expo-location';
 export interface Coordinate {
   latitude: number;
   longitude: number;
+  speed?: number;
+  leanAngle?: number;
+  time?: number;
 }
 
 // Haversine formula to calculate distance between coordinates in km
@@ -24,8 +27,16 @@ const getDistanceBetweenPoints = (coords1: Coordinate, coords2: Coordinate): num
   return R * c;
 };
 
-export const useLocation = () => {
+export const useLocation = (currentLean?: number) => {
   const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null);
+  const leanRef = useRef(0);
+  const startTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (currentLean !== undefined) {
+      leanRef.current = currentLean;
+    }
+  }, [currentLean]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedRoute, setRecordedRoute] = useState<Coordinate[]>([]);
   const [totalDistance, setTotalDistance] = useState(0); // In kilometers
@@ -95,6 +106,7 @@ export const useLocation = () => {
     setSpeed(0);
     setErrorMsg(null);
     lastLocationRef.current = null;
+    startTimeRef.current = Date.now();
 
     // Watch location changes
     locationSubscription.current = await Location.watchPositionAsync(
@@ -104,14 +116,9 @@ export const useLocation = () => {
         distanceInterval: 5, // every 5 meters
       },
       (location) => {
-        const newCoord: Coordinate = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        };
-
-        setCurrentLocation(newCoord);
-        
         const currentTimestamp = location.timestamp;
+        const relativeTime = startTimeRef.current ? (currentTimestamp - startTimeRef.current) / 1000 : 0;
+        
         let calculatedSpeedKmh = 0;
 
         // 1. Try to use GPS speed from coords (if positive and valid)
@@ -123,10 +130,27 @@ export const useLocation = () => {
         else if (lastLocationRef.current) {
           const timeDiffSec = (currentTimestamp - lastLocationRef.current.timestamp) / 1000;
           if (timeDiffSec > 0.5 && timeDiffSec < 10) { // Limit to sensible time gap
-            const dist = getDistanceBetweenPoints(lastLocationRef.current, newCoord);
+            const dist = getDistanceBetweenPoints(lastLocationRef.current, {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
             calculatedSpeedKmh = (dist / timeDiffSec) * 3600;
           }
         }
+
+        // Apply a threshold/deadband to filter out noise when stationary (minimum 1.8 km/h / 0.5 m/s)
+        const speedKmh = calculatedSpeedKmh >= 1.8 ? Math.round(calculatedSpeedKmh) : 0;
+        setSpeed(speedKmh);
+
+        const newCoord: Coordinate = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          speed: speedKmh,
+          leanAngle: leanRef.current,
+          time: parseFloat(relativeTime.toFixed(1)),
+        };
+
+        setCurrentLocation(newCoord);
 
         // Store current location and timestamp for next update
         lastLocationRef.current = {
@@ -134,10 +158,6 @@ export const useLocation = () => {
           longitude: newCoord.longitude,
           timestamp: currentTimestamp,
         };
-
-        // Apply a threshold/deadband to filter out noise when stationary (minimum 1.8 km/h / 0.5 m/s)
-        const speedKmh = calculatedSpeedKmh >= 1.8 ? Math.round(calculatedSpeedKmh) : 0;
-        setSpeed(speedKmh);
         
         setRecordedRoute((prevRoute) => {
           if (prevRoute.length === 0) {

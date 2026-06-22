@@ -3,9 +3,11 @@ import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Modal, Scro
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT, UrlTile } from 'react-native-maps';
 import { WebView } from 'react-native-webview';
-import { Play, Square, Navigation, Bookmark, X, Eye, Trash2 } from 'lucide-react-native';
+import { Play, Square, Navigation, Bookmark, X, Eye, Trash2, Video } from 'lucide-react-native';
 import { Accelerometer } from 'expo-sensors';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { VideoView, useVideoPlayer } from 'expo-video';
 
 // Safe load of expo-media-library to prevent runtime crash in environments where the native module is not compiled yet
 let MediaLibrary: any = null;
@@ -38,26 +40,8 @@ export default function RoutesMapScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const {
-    currentLocation,
-    isRecording,
-    recordedRoute,
-    totalDistance,
-    speed,
-    startRecording,
-    stopRecording,
-    clearRecordedRoute,
-    requestPermissions
-  } = useLocation();
-
   const mapRef = useRef<MapView | null>(null);
   const webViewRef = useRef<WebView | null>(null);
-
-  // States
-  const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saveModalVisible, setSaveModalVisible] = useState(false);
-  const [routesModalVisible, setRoutesModalVisible] = useState(false);
 
   // Telemetry States
   const [hasAccelerometer, setHasAccelerometer] = useState<boolean | null>(null);
@@ -68,10 +52,85 @@ export default function RoutesMapScreen() {
   const [simSpeed, setSimSpeed] = useState(0);
   const [simLean, setSimLean] = useState(0);
 
+  const {
+    currentLocation,
+    isRecording,
+    recordedRoute,
+    totalDistance,
+    speed,
+    startRecording,
+    stopRecording,
+    clearRecordedRoute,
+    requestPermissions
+  } = useLocation(leanAngle);
+
+  // States
+  const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saveModalVisible, setSaveModalVisible] = useState(false);
+  const [routesModalVisible, setRoutesModalVisible] = useState(false);
+
   // Camera HUD States
   const [cameraModeActive, setCameraModeActive] = useState(false);
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
   const cameraRef = useRef<CameraView | null>(null);
+
+  // Video Playback overlay state linked to AsyncStorage
+  const [recordedVideoUri, setRecordedVideoUri] = useState<string | null>(null);
+  const [routeVideos, setRouteVideos] = useState<Record<string, string>>({});
+
+  // Telemetry Player States
+  const [playbackModalVisible, setPlaybackModalVisible] = useState(false);
+  const [playbackVideoUri, setPlaybackVideoUri] = useState<string | null>(null);
+  const [playbackRoute, setPlaybackRoute] = useState<SavedRoute | null>(null);
+  const [playbackSpeed, setPlaybackSpeed] = useState(0);
+  const [playbackLean, setPlaybackLean] = useState(0);
+  const [isPlayingVideo, setIsPlayingVideo] = useState(false);
+
+  // Initialize Video Player for playback
+  const videoPlayer = useVideoPlayer(playbackVideoUri, (player) => {
+    player.loop = false;
+    player.timeUpdateEventInterval = 0.1; // 100ms updates
+  });
+
+  // Synchronize playback timeline with route coordinates telemetry
+  useEffect(() => {
+    if (!videoPlayer) return;
+
+    const timeUpdateSub = videoPlayer.addListener('timeUpdate', (event) => {
+      const time = event.currentTime;
+      if (playbackRoute && playbackRoute.coordinates && playbackRoute.coordinates.length > 0) {
+        const coords = playbackRoute.coordinates as Coordinate[];
+        
+        // Find the closest coordinate point in time relative to the video playhead
+        let closestPoint = coords[0];
+        let minDiff = Infinity;
+        
+        for (const point of coords) {
+          const ptTime = point.time ?? 0;
+          const diff = Math.abs(ptTime - time);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestPoint = point;
+          }
+        }
+        
+        if (closestPoint) {
+          setPlaybackSpeed(closestPoint.speed ?? 0);
+          setPlaybackLean(closestPoint.leanAngle ?? 0);
+        }
+      }
+    });
+
+    const playingChangeSub = videoPlayer.addListener('playingChange', (event) => {
+      setIsPlayingVideo(event.isPlaying);
+    });
+
+    return () => {
+      timeUpdateSub.remove();
+      playingChangeSub.remove();
+    };
+  }, [videoPlayer, playbackRoute]);
 
   // Map Type State
   const [mapType, setMapType] = useState<'standard' | 'hybrid'>('standard');
@@ -183,6 +242,22 @@ export default function RoutesMapScreen() {
         coordinates: typeof r.coordinates === 'string' ? JSON.parse(r.coordinates) : r.coordinates
       }));
       setSavedRoutes(formatted);
+
+      // Load route video links from local AsyncStorage
+      try {
+        const keys = formatted.map((r: any) => `route_video_${r.id}`);
+        const pairs = await AsyncStorage.multiGet(keys);
+        const mapping: Record<string, string> = {};
+        pairs.forEach(([key, val]) => {
+          if (val) {
+            const routeId = key.replace('route_video_', '');
+            mapping[routeId] = val;
+          }
+        });
+        setRouteVideos(mapping);
+      } catch (storageErr) {
+        console.error('Error fetching route video mappings:', storageErr);
+      }
     } catch (e) {
       console.error('Error fetching saved routes:', e);
     } finally {
@@ -405,12 +480,16 @@ export default function RoutesMapScreen() {
         cameraRef.current.recordAsync().then(async (file) => {
           if (file && file.uri) {
             let savedToGallery = false;
+            let videoIdentifier = file.uri;
             if (MediaLibrary) {
               try {
                 // 1. Try class-based modern SDK 56 API: MediaLibrary.Asset.create
                 if (MediaLibrary.Asset && typeof MediaLibrary.Asset.create === 'function') {
-                  await MediaLibrary.Asset.create(file.uri);
+                  const asset = await MediaLibrary.Asset.create(file.uri);
                   savedToGallery = true;
+                  if (asset && asset.uri) {
+                    videoIdentifier = asset.uri;
+                  }
                 } 
                 // 2. Try the legacy package if imported or if we can require it dynamically
                 else {
@@ -423,14 +502,19 @@ export default function RoutesMapScreen() {
                     await legacyMediaLibrary.saveToLibraryAsync(file.uri);
                     savedToGallery = true;
                   } else if (legacyMediaLibrary && typeof legacyMediaLibrary.createAssetAsync === 'function') {
-                    await legacyMediaLibrary.createAssetAsync(file.uri);
+                    const asset = await legacyMediaLibrary.createAssetAsync(file.uri);
                     savedToGallery = true;
+                    if (asset && asset.uri) {
+                      videoIdentifier = asset.uri;
+                    }
                   }
                 }
               } catch (saveErr) {
                 console.error('Failed to save to gallery:', saveErr);
               }
             }
+
+            setRecordedVideoUri(videoIdentifier);
 
             if (savedToGallery) {
               showAlert('Video Guardado', 'El video de tu ruta se ha guardado en tu galería.');
@@ -490,7 +574,18 @@ export default function RoutesMapScreen() {
       };
 
       // Changed to relative path without leading slash
-      await api.post('routes', payload);
+      const res = await api.post('routes', payload);
+      const savedRoute = res.data;
+      if (savedRoute && savedRoute.id && recordedVideoUri) {
+        try {
+          await AsyncStorage.setItem(`route_video_${savedRoute.id}`, recordedVideoUri);
+          setRouteVideos(prev => ({ ...prev, [savedRoute.id]: recordedVideoUri }));
+        } catch (storageErr) {
+          console.error('Failed to link video in AsyncStorage:', storageErr);
+        }
+      }
+      setRecordedVideoUri(null);
+
       showAlert('Ruta Guardada', 'La ruta ha sido añadida a tus favoritos.');
       
       // Reset forms & close
@@ -1201,7 +1296,28 @@ export default function RoutesMapScreen() {
                           )}
                         </View>
                         
-                        <View className="flex-row space-x-2 ml-4">
+                        <View className="flex-row ml-4" style={{ gap: 8 }}>
+                          {routeVideos[route.id] && (
+                            <TouchableOpacity
+                              onPress={() => {
+                                setRoutesModalVisible(false);
+                                setPlaybackVideoUri(routeVideos[route.id]);
+                                setPlaybackRoute(route);
+                                setPlaybackSpeed(0);
+                                setPlaybackLean(0);
+                                setPlaybackModalVisible(true);
+                                // Play automatically after modal animation
+                                setTimeout(() => {
+                                  if (videoPlayer) {
+                                    videoPlayer.play();
+                                  }
+                                }, 500);
+                              }}
+                              className={`${colors.card} border ${colors.border} p-2 rounded-lg`}
+                            >
+                              <Video size={16} color="#00E5FF" />
+                            </TouchableOpacity>
+                          )}
                           <TouchableOpacity
                             onPress={() => handleViewRoute(route)}
                             className={`${colors.card} border ${colors.border} p-2 rounded-lg`}
@@ -1230,9 +1346,131 @@ export default function RoutesMapScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Video Playback Modal with Telemetry Overlay */}
+      <Modal visible={playbackModalVisible} animationType="fade" transparent={true}>
+        <View className="flex-1 bg-black justify-between">
+          {/* Full Screen Video view */}
+          {playbackVideoUri && (
+            <VideoView 
+              player={videoPlayer} 
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+              nativeControls={false} 
+            />
+          )}
+
+          {/* Top Bar with route name and close button */}
+          <SafeAreaView edges={['top']} className="w-full flex-row justify-between items-center p-4 bg-gradient-to-b from-black/80 to-transparent z-10">
+            <View>
+              <Text className="text-white font-rajdhani-bold text-lg font-bold uppercase tracking-[2px]">
+                {playbackRoute?.name}
+              </Text>
+              <Text className="text-gray-400 font-barlow-condensed text-xs uppercase">
+                REPRODUCCIÓN DE TELEMETRÍA
+              </Text>
+            </View>
+            <TouchableOpacity 
+              onPress={() => {
+                videoPlayer.pause();
+                setPlaybackModalVisible(false);
+                setPlaybackVideoUri(null);
+                setPlaybackRoute(null);
+              }} 
+              className="p-2 bg-black/60 rounded-full border border-white/20"
+            >
+              <X size={20} color="white" />
+            </TouchableOpacity>
+          </SafeAreaView>
+
+          {/* Centered Horizon indicator overlay (just empty flex spacer for layout) */}
+          <View className="flex-1 justify-center items-center pointer-events-none" />
+
+          {/* Bottom Bar: Telemetry gauges and controls */}
+          <View className="w-full bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6 z-10">
+            {/* Speed and Lean HUD (BMW TFT style overlay) */}
+            <View className="flex-row justify-around items-center mb-6">
+              {/* Speedometer */}
+              <View className="items-center bg-black/40 border border-white/10 rounded-2xl p-4 min-w-[120px]">
+                <Text className="text-gray-400 font-barlow-condensed-bold text-xs uppercase tracking-wider">VELOCIDAD</Text>
+                <Text className="text-white font-bold text-4xl font-orbitron">{playbackSpeed}</Text>
+                <Text className="text-gray-500 font-barlow-condensed-bold text-2xs uppercase mt-0.5">KM/H</Text>
+              </View>
+
+              {/* Inclinometer Horizon circle */}
+              <View className="items-center justify-center w-24 h-24 rounded-full border border-white/20 bg-black/40 relative">
+                <View 
+                  style={{
+                    transform: [{ rotate: `${-playbackLean}deg` }],
+                    width: 70,
+                    height: 2,
+                    backgroundColor: '#00E5FF',
+                    borderRadius: 1,
+                  }}
+                />
+                <Text className="text-white font-rajdhani-bold text-base font-bold absolute mt-8">{Math.abs(playbackLean)}°</Text>
+                <Text className="text-[#00E5FF] font-barlow-condensed-bold text-2xs uppercase absolute mb-10">INCLINACIÓN</Text>
+              </View>
+
+              {/* Roll angle stats */}
+              <View className="items-center bg-black/40 border border-white/10 rounded-2xl p-4 min-w-[120px]">
+                <Text className="text-gray-400 font-barlow-condensed-bold text-xs uppercase tracking-wider">GIRO</Text>
+                <Text className="text-[#00A3E0] font-bold text-2xl font-rajdhani-bold">{playbackLean < 0 ? `L ${Math.abs(playbackLean)}°` : playbackLean > 0 ? `R ${playbackLean}°` : '0°'}</Text>
+                <Text className="text-gray-500 font-barlow-condensed-bold text-2xs uppercase mt-0.5">ÁNGULO</Text>
+              </View>
+            </View>
+
+            {/* Custom Video Playback Controls */}
+            <View className="flex-row items-center justify-between">
+              {/* Play/Pause Button */}
+              <TouchableOpacity 
+                onPress={() => {
+                  if (isPlayingVideo) {
+                    videoPlayer.pause();
+                  } else {
+                    videoPlayer.play();
+                  }
+                }}
+                className="p-3 bg-[#00A3E0] rounded-full"
+              >
+                {isPlayingVideo ? (
+                  <View className="flex-row justify-center items-center" style={{ gap: 4 }}>
+                    <View className="w-1.5 h-4 bg-white rounded-sm" />
+                    <View className="w-1.5 h-4 bg-white rounded-sm" />
+                  </View>
+                ) : (
+                  <Play size={18} color="white" fill="white" />
+                )}
+              </TouchableOpacity>
+
+              {/* Video Timeline Scrubber */}
+              <View className="flex-1 mx-4 h-1.5 bg-white/20 rounded-full overflow-hidden justify-center">
+                <View 
+                  style={{ 
+                    width: `${videoPlayer.duration > 0 ? (videoPlayer.currentTime / videoPlayer.duration) * 100 : 0}%`,
+                    height: '100%',
+                    backgroundColor: '#00A3E0'
+                  }} 
+                />
+              </View>
+
+              {/* Timing info */}
+              <Text className="text-white font-orbitron text-2xs">
+                {formatTime(videoPlayer.currentTime)} / {formatTime(videoPlayer.duration)}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+const formatTime = (seconds: number) => {
+  if (isNaN(seconds)) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+};
 
 // Sleek Dark Map Theme styling for Google Maps (Android)
 const darkMapStyle = [

@@ -64,7 +64,8 @@
           "photosPermission": "MotoPulse necesita acceder a tu galería para guardar los videos de tus rutas.",
           "savePhotosPermission": "MotoPulse necesita acceder a tu galería para guardar los videos de tus rutas."
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,
