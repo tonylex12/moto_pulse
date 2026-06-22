@@ -112,8 +112,8 @@ export default function RoutesMapScreen() {
     recordedVideoUriRef.current = recordedVideoUri;
   }, [recordedVideoUri]);
 
-  // Initialize Video Player for playback
-  const videoPlayer = useVideoPlayer(playbackVideoUri, (player) => {
+  // Initialize Video Player for playback (using static null source to prevent React hook re-initialization and native release crashes)
+  const videoPlayer = useVideoPlayer(null, (player) => {
     player.loop = false;
     player.timeUpdateEventInterval = 0.1; // 100ms updates
   });
@@ -1370,13 +1370,21 @@ export default function RoutesMapScreen() {
                                 setPlaybackSpeed(0);
                                 setPlaybackLean(0);
                                 if (videoPlayer && videoUri) {
-                                  videoPlayer.replace(videoUri);
+                                  try {
+                                    videoPlayer.replace(videoUri);
+                                  } catch (replaceErr) {
+                                    console.warn('Failed to replace video source:', replaceErr);
+                                  }
                                 }
                                 setPlaybackModalVisible(true);
                                 // Play automatically after modal animation
                                 setTimeout(() => {
                                   if (videoPlayer) {
-                                    videoPlayer.play();
+                                    try {
+                                      videoPlayer.play();
+                                    } catch (playErr) {
+                                      console.warn('Failed to play video automatically:', playErr);
+                                    }
                                   }
                                 }, 500);
                               }}
@@ -1438,9 +1446,13 @@ export default function RoutesMapScreen() {
             </View>
             <TouchableOpacity 
               onPress={() => {
-                videoPlayer.pause();
                 if (videoPlayer) {
-                  videoPlayer.replace(null);
+                  try {
+                    videoPlayer.pause();
+                    videoPlayer.replace(null);
+                  } catch (e) {
+                    console.warn('Failed to clean up video player on close:', e);
+                  }
                 }
                 setPlaybackModalVisible(false);
                 setPlaybackVideoUri(null);
@@ -1494,10 +1506,14 @@ export default function RoutesMapScreen() {
               {/* Play/Pause Button */}
               <TouchableOpacity 
                 onPress={() => {
-                  if (isPlayingVideo) {
-                    videoPlayer.pause();
-                  } else {
-                    videoPlayer.play();
+                  try {
+                    if (isPlayingVideo) {
+                      videoPlayer.pause();
+                    } else {
+                      videoPlayer.play();
+                    }
+                  } catch (e) {
+                    console.warn('Failed to toggle play/pause:', e);
                   }
                 }}
                 className="p-3 bg-[#00A3E0] rounded-full"
