@@ -210,6 +210,18 @@ export default function RoutesMapScreen() {
     };
   }, []);
 
+  // Synchronize refs for speed and simSpeed to avoid capturing stale values in sensor listeners
+  const speedRef = useRef(0);
+  const simSpeedRef = useRef(0);
+
+  useEffect(() => {
+    speedRef.current = speed;
+  }, [speed]);
+
+  useEffect(() => {
+    simSpeedRef.current = simSpeed;
+  }, [simSpeed]);
+
   // Native Accelerometer listener when active recording and available
   useEffect(() => {
     if (!isRecording || !hasAccelerometer || Platform.OS === 'web') return;
@@ -218,6 +230,8 @@ export default function RoutesMapScreen() {
 
     let prevLean = 0;
     const smoothingFactor = 0.15; // Low-pass filter smoothing
+    let isCalibrated = false;
+    let calibrationOffset = 0;
 
     const subscription = Accelerometer.addListener((data) => {
       // Calculate roll angle: atan2(x, -y)
@@ -231,15 +245,33 @@ export default function RoutesMapScreen() {
       const smoothedLean = (1 - smoothingFactor) * prevLean + smoothingFactor * rawLean;
       prevLean = smoothedLean;
 
-      const roundedLean = Math.round(smoothedLean);
-      const clampedLean = Math.max(-60, Math.min(60, roundedLean));
-      setLeanAngle(clampedLean);
+      // Read current speed from ref to ensure up-to-date value without effect re-subscription
+      const currentSpeed = speedRef.current;
 
-      // Record peak lean angles
-      if (clampedLean < 0) {
-        setMaxLeftLean((prev) => Math.max(prev, Math.abs(clampedLean)));
-      } else if (clampedLean > 0) {
-        setMaxRightLean((prev) => Math.max(prev, clampedLean));
+      // Self-calibration: when we first start moving (speed > 5 km/h), set this as the zero reference offset
+      if (!isCalibrated && currentSpeed > 5) {
+        calibrationOffset = smoothedLean;
+        isCalibrated = true;
+        console.log('Telemetry calibrated. Offset set to:', calibrationOffset);
+      }
+
+      // Apply calibration offset
+      const calibratedLean = smoothedLean - calibrationOffset;
+
+      const roundedLean = Math.round(calibratedLean);
+      const clampedLean = Math.max(-60, Math.min(60, roundedLean));
+      
+      // Apply a small deadband of 1.5 degrees around 0 to avoid jitter when riding straight
+      const finalLean = Math.abs(clampedLean) <= 1 ? 0 : clampedLean;
+      setLeanAngle(finalLean);
+
+      // Record peak lean angles only when actually moving (speed > 5 km/h) to avoid kickstand or stoplight noise
+      if (currentSpeed > 5) {
+        if (finalLean < 0) {
+          setMaxLeftLean((prev) => Math.max(prev, Math.abs(finalLean)));
+        } else if (finalLean > 0) {
+          setMaxRightLean((prev) => Math.max(prev, finalLean));
+        }
       }
     });
 

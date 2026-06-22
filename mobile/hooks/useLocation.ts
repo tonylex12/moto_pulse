@@ -110,8 +110,9 @@ export const useLocation = () => {
         setCurrentLocation(newCoord);
         
         // Expose speed: convert meters/second to km/h (speed * 3.6)
+        // Introduce a threshold of 1.1 m/s (~4 km/h) to filter out GPS drift/jitter when stationary
         const gpsSpeed = location.coords.speed;
-        const speedKmh = gpsSpeed !== null && gpsSpeed !== undefined
+        const speedKmh = gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed >= 1.1
           ? Math.max(0, Math.round(gpsSpeed * 3.6))
           : 0;
         setSpeed(speedKmh);
