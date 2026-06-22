@@ -33,6 +33,7 @@ export const useLocation = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
+  const lastLocationRef = useRef<{ latitude: number; longitude: number; timestamp: number } | null>(null);
 
   // Ask for foreground permissions and get initial position
   const requestPermissions = async () => {
@@ -93,6 +94,7 @@ export const useLocation = () => {
     setTotalDistance(0);
     setSpeed(0);
     setErrorMsg(null);
+    lastLocationRef.current = null;
 
     // Watch location changes
     locationSubscription.current = await Location.watchPositionAsync(
@@ -109,12 +111,32 @@ export const useLocation = () => {
 
         setCurrentLocation(newCoord);
         
-        // Expose speed: convert meters/second to km/h (speed * 3.6)
-        // Introduce a threshold of 1.1 m/s (~4 km/h) to filter out GPS drift/jitter when stationary
+        const currentTimestamp = location.timestamp;
+        let calculatedSpeedKmh = 0;
+
+        // 1. Try to use GPS speed from coords (if positive and valid)
         const gpsSpeed = location.coords.speed;
-        const speedKmh = gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed >= 1.1
-          ? Math.max(0, Math.round(gpsSpeed * 3.6))
-          : 0;
+        if (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed > 0) {
+          calculatedSpeedKmh = gpsSpeed * 3.6;
+        } 
+        // 2. Fallback: Calculate speed manually using distance and time from last coordinate
+        else if (lastLocationRef.current) {
+          const timeDiffSec = (currentTimestamp - lastLocationRef.current.timestamp) / 1000;
+          if (timeDiffSec > 0.5 && timeDiffSec < 10) { // Limit to sensible time gap
+            const dist = getDistanceBetweenPoints(lastLocationRef.current, newCoord);
+            calculatedSpeedKmh = (dist / timeDiffSec) * 3600;
+          }
+        }
+
+        // Store current location and timestamp for next update
+        lastLocationRef.current = {
+          latitude: newCoord.latitude,
+          longitude: newCoord.longitude,
+          timestamp: currentTimestamp,
+        };
+
+        // Apply a threshold/deadband to filter out noise when stationary (minimum 1.8 km/h / 0.5 m/s)
+        const speedKmh = calculatedSpeedKmh >= 1.8 ? Math.round(calculatedSpeedKmh) : 0;
         setSpeed(speedKmh);
         
         setRecordedRoute((prevRoute) => {
@@ -143,12 +165,14 @@ export const useLocation = () => {
     }
     setIsRecording(false);
     setSpeed(0);
+    lastLocationRef.current = null;
   };
 
   const clearRecordedRoute = () => {
     setRecordedRoute([]);
     setTotalDistance(0);
     setSpeed(0);
+    lastLocationRef.current = null;
   };
 
   return {
