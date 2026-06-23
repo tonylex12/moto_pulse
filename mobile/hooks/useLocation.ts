@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Alert, DeviceEventEmitter } from 'react-native';
+import { Alert, DeviceEventEmitter, AppState, AppStateStatus } from 'react-native';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface Coordinate {
   latitude: number;
@@ -12,6 +13,8 @@ export interface Coordinate {
 }
 
 const LOCATION_TASK_NAME = 'background-location-task';
+const IS_RECORDING_STORAGE_KEY = '@motopulse_is_recording';
+const ACTIVE_ROUTE_STORAGE_KEY = '@motopulse_active_recorded_route';
 
 // Global variables to synchronize tracking state between the background task and hook instances
 let recordedRouteGlobal: Coordinate[] = [];
@@ -44,61 +47,87 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
     console.error('[BackgroundLocationTask] Task error:', error);
     return;
   }
-  if (data && isRecordingGlobal) {
-    const { locations } = data as { locations: Location.LocationObject[] };
-    if (!locations || locations.length === 0) return;
+  if (data) {
+    try {
+      // Check if we are actively recording in storage (headless tasks don't share isRecordingGlobal)
+      const isRecordingStored = await AsyncStorage.getItem(IS_RECORDING_STORAGE_KEY);
+      const isRecording = isRecordingStored === 'true';
+      if (!isRecording) return;
 
-    for (const location of locations) {
-      const currentTimestamp = location.timestamp;
-      
-      if (!startTimeGlobal) {
-        startTimeGlobal = currentTimestamp;
-      }
-      
-      const relativeTime = (currentTimestamp - startTimeGlobal) / 1000;
-      
-      // Directly use the OS/sensor speed from coordinates (converted from m/s to km/h)
-      const gpsSpeed = location.coords.speed;
-      const speedKmh = (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed > 0)
-        ? Math.round(gpsSpeed * 3.6)
-        : 0;
+      const { locations } = data as { locations: Location.LocationObject[] };
+      if (!locations || locations.length === 0) return;
 
-      const newCoord: Coordinate = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        speed: speedKmh,
-        leanAngle: leanAngleGlobal,
-        time: parseFloat(relativeTime.toFixed(1)),
-      };
+      // Read current state from AsyncStorage
+      const storedData = await AsyncStorage.getItem(ACTIVE_ROUTE_STORAGE_KEY);
+      let activeRoute = storedData 
+        ? JSON.parse(storedData) 
+        : { coordinates: [], totalDistance: 0, startTime: null };
 
-      // Check distance from last global coordinate
-      let shouldAdd = false;
-      let dist = 0;
-      if (recordedRouteGlobal.length === 0) {
-        shouldAdd = true;
-      } else {
-        const lastCoord = recordedRouteGlobal[recordedRouteGlobal.length - 1];
-        dist = getDistanceBetweenPoints(lastCoord, newCoord);
-        if (dist > 0.002) {
+      let updated = false;
+
+      for (const location of locations) {
+        const currentTimestamp = location.timestamp;
+        
+        if (!activeRoute.startTime) {
+          activeRoute.startTime = currentTimestamp;
+        }
+        
+        const relativeTime = (currentTimestamp - activeRoute.startTime) / 1000;
+        
+        // Directly use the OS/sensor speed from coordinates (converted from m/s to km/h)
+        const gpsSpeed = location.coords.speed;
+        const speedKmh = (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed > 0)
+          ? Math.round(gpsSpeed * 3.6)
+          : 0;
+
+        const newCoord: Coordinate = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          speed: speedKmh,
+          leanAngle: leanAngleGlobal,
+          time: parseFloat(relativeTime.toFixed(1)),
+        };
+
+        // Check distance from last recorded coordinate
+        let shouldAdd = false;
+        let dist = 0;
+        if (activeRoute.coordinates.length === 0) {
           shouldAdd = true;
+        } else {
+          const lastCoord = activeRoute.coordinates[activeRoute.coordinates.length - 1];
+          dist = getDistanceBetweenPoints(lastCoord, newCoord);
+          if (dist > 0.002) {
+            shouldAdd = true;
+          }
+        }
+
+        if (shouldAdd) {
+          activeRoute.coordinates.push(newCoord);
+          activeRoute.totalDistance += dist;
+          updated = true;
+          console.log(`[BackgroundLocationTask] Added point: Lat ${newCoord.latitude}, Lng ${newCoord.longitude}. Total points: ${activeRoute.coordinates.length}`);
         }
       }
 
-      if (shouldAdd) {
-        recordedRouteGlobal.push(newCoord);
-        totalDistanceGlobal += dist;
-        lastLocationGlobal = newCoord;
+      if (updated) {
+        // Save updated state back to AsyncStorage
+        await AsyncStorage.setItem(ACTIVE_ROUTE_STORAGE_KEY, JSON.stringify(activeRoute));
+
+        // Also update the global module variables for any active foreground UI context
+        recordedRouteGlobal = activeRoute.coordinates;
+        totalDistanceGlobal = activeRoute.totalDistance;
+        startTimeGlobal = activeRoute.startTime;
 
         // Notify active hook instances in real-time
         DeviceEventEmitter.emit('background-location-update', {
-          recordedRoute: [...recordedRouteGlobal],
-          totalDistance: totalDistanceGlobal,
-          speed: speedKmh,
-          currentLocation: newCoord,
+          recordedRoute: [...activeRoute.coordinates],
+          totalDistance: activeRoute.totalDistance,
+          speed: activeRoute.coordinates[activeRoute.coordinates.length - 1]?.speed || 0,
+          currentLocation: activeRoute.coordinates[activeRoute.coordinates.length - 1],
         });
-
-        console.log(`[BackgroundLocationTask] Added point: Lat ${newCoord.latitude}, Lng ${newCoord.longitude}. Total points: ${recordedRouteGlobal.length}`);
       }
+    } catch (err) {
+      console.error('[BackgroundLocationTask] Error saving/reading storage:', err);
     }
   }
 });
@@ -123,9 +152,38 @@ export const useLocation = (currentLean?: number) => {
 
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
+  // Load route from storage on startup or when app comes to foreground
+  const loadRouteFromStorage = async () => {
+    try {
+      const storedData = await AsyncStorage.getItem(ACTIVE_ROUTE_STORAGE_KEY);
+      if (storedData) {
+        const activeRoute = JSON.parse(storedData);
+        if (activeRoute && activeRoute.coordinates && activeRoute.coordinates.length > 0) {
+          recordedRouteGlobal = activeRoute.coordinates;
+          totalDistanceGlobal = activeRoute.totalDistance;
+          startTimeGlobal = activeRoute.startTime;
+          
+          setRecordedRoute([...recordedRouteGlobal]);
+          setTotalDistance(totalDistanceGlobal);
+          
+          const lastPoint = recordedRouteGlobal[recordedRouteGlobal.length - 1];
+          setSpeed(lastPoint.speed || 0);
+          setCurrentLocation(lastPoint);
+          
+          console.log(`[useLocation] Restored route from storage: ${recordedRouteGlobal.length} points, ${totalDistanceGlobal.toFixed(2)} km`);
+        }
+      }
+    } catch (e) {
+      console.error('[useLocation] Failed to load route from storage:', e);
+    }
+  };
+
   // Sync background updates to local React hook state
   useEffect(() => {
     const emitterSub = DeviceEventEmitter.addListener('background-location-update', (data) => {
+      recordedRouteGlobal = data.recordedRoute;
+      totalDistanceGlobal = data.totalDistance;
+      
       setRecordedRoute(data.recordedRoute);
       setTotalDistance(data.totalDistance);
       setSpeed(data.speed);
@@ -133,6 +191,76 @@ export const useLocation = (currentLean?: number) => {
     });
     return () => {
       emitterSub.remove();
+    };
+  }, []);
+
+  // Check active recording on hook mount/initialization
+  useEffect(() => {
+    const checkActiveRecording = async () => {
+      try {
+        const isRecordingStored = await AsyncStorage.getItem(IS_RECORDING_STORAGE_KEY);
+        if (isRecordingStored === 'true') {
+          console.log('[useLocation] Found active recording on hook mount. Restoring state...');
+          isRecordingGlobal = true;
+          setIsRecording(true);
+          await loadRouteFromStorage();
+
+          // Check if background tracking task is still running, otherwise restart it
+          const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+          if (!started) {
+            console.log('[useLocation] Background tracking task was stopped. Restarting location updates...');
+            
+            let hasBackgroundPermission = false;
+            const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
+            hasBackgroundPermission = bgStatus === 'granted';
+            
+            if (hasBackgroundPermission) {
+              await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+                accuracy: Location.Accuracy.BestForNavigation,
+                timeInterval: 2000,
+                distanceInterval: 0,
+                foregroundService: {
+                  notificationTitle: 'MotoPulse - Grabando Ruta',
+                  notificationBody: 'MotoPulse está registrando tu telemetría y coordenadas GPS en tiempo real.',
+                  notificationColor: '#00A3E0',
+                },
+              });
+            } else {
+              // Fallback to watchPositionAsync
+              locationSubscription.current = await Location.watchPositionAsync(
+                {
+                  accuracy: Location.Accuracy.BestForNavigation,
+                  timeInterval: 2000,
+                  distanceInterval: 0,
+                },
+                handleLocationUpdate
+              );
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to check active recording status:', e);
+      }
+    };
+    checkActiveRecording();
+  }, []);
+
+  // Listen to AppState to reload route when returning to the foreground
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        AsyncStorage.getItem(IS_RECORDING_STORAGE_KEY).then((isRecordingStored) => {
+          if (isRecordingStored === 'true') {
+            console.log('[useLocation] App returned to active. Reloading route from storage...');
+            loadRouteFromStorage();
+          }
+        }).catch(err => console.warn(err));
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      sub.remove();
     };
   }, []);
 
@@ -202,6 +330,65 @@ export const useLocation = (currentLean?: number) => {
     };
   }, []);
 
+  // Unified location update handler (reused in watchPositionAsync)
+  const handleLocationUpdate = (location: Location.LocationObject) => {
+    const currentTimestamp = location.timestamp;
+    
+    if (!startTimeGlobal) {
+      startTimeGlobal = currentTimestamp;
+    }
+    
+    const relativeTime = (currentTimestamp - startTimeGlobal) / 1000;
+    
+    const gpsSpeed = location.coords.speed;
+    const speedKmh = (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed > 0) 
+      ? Math.round(gpsSpeed * 3.6) 
+      : 0;
+    setSpeed(speedKmh);
+
+    const newCoord: Coordinate = {
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+      speed: speedKmh,
+      leanAngle: leanRef.current,
+      time: parseFloat(relativeTime.toFixed(1)),
+    };
+
+    setCurrentLocation(newCoord);
+    lastLocationGlobal = newCoord;
+
+    setRecordedRoute((prevRoute) => {
+      let shouldAdd = false;
+      let dist = 0;
+      if (recordedRouteGlobal.length === 0) {
+        shouldAdd = true;
+      } else {
+        const lastCoord = recordedRouteGlobal[recordedRouteGlobal.length - 1];
+        dist = getDistanceBetweenPoints(lastCoord, newCoord);
+        if (dist > 0.002) {
+          shouldAdd = true;
+        }
+      }
+
+      if (shouldAdd) {
+        recordedRouteGlobal.push(newCoord);
+        totalDistanceGlobal += dist;
+        setTotalDistance(totalDistanceGlobal);
+
+        // Persist the updated state to AsyncStorage
+        AsyncStorage.setItem(ACTIVE_ROUTE_STORAGE_KEY, JSON.stringify({
+          coordinates: [...recordedRouteGlobal],
+          totalDistance: totalDistanceGlobal,
+          startTime: startTimeGlobal
+        })).catch(e => console.warn('Failed to save route to storage:', e));
+
+        console.log(`[ForegroundUpdate] Added point: Lat ${newCoord.latitude}, Lng ${newCoord.longitude}. Total points: ${recordedRouteGlobal.length}`);
+        return [...recordedRouteGlobal];
+      }
+      return prevRoute;
+    });
+  };
+
   // Start route recording
   const startRecording = async () => {
     const hasPermission = await checkAndRequestPermissions();
@@ -221,6 +408,18 @@ export const useLocation = (currentLean?: number) => {
     setSpeed(0);
     setErrorMsg(null);
     startTimeRef.current = startTimeGlobal;
+
+    // Clear active route and set recording active in storage
+    try {
+      await AsyncStorage.setItem(IS_RECORDING_STORAGE_KEY, 'true');
+      await AsyncStorage.setItem(ACTIVE_ROUTE_STORAGE_KEY, JSON.stringify({
+        coordinates: [],
+        totalDistance: 0,
+        startTime: startTimeGlobal
+      }));
+    } catch (e) {
+      console.warn('Failed to initialize AsyncStorage active route keys:', e);
+    }
 
     // Request and check background location permissions
     let hasBackgroundPermission = false;
@@ -263,50 +462,7 @@ export const useLocation = (currentLean?: number) => {
           timeInterval: 2000, // every 2 seconds
           distanceInterval: 0, // no native distance limit
         },
-        (location) => {
-          const currentTimestamp = location.timestamp;
-          const relativeTime = startTimeGlobal ? (currentTimestamp - startTimeGlobal) / 1000 : 0;
-          
-          const gpsSpeed = location.coords.speed;
-          const speedKmh = (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed > 0) 
-            ? Math.round(gpsSpeed * 3.6) 
-            : 0;
-          setSpeed(speedKmh);
-
-          const newCoord: Coordinate = {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            speed: speedKmh,
-            leanAngle: leanRef.current,
-            time: parseFloat(relativeTime.toFixed(1)),
-          };
-
-          setCurrentLocation(newCoord);
-          lastLocationGlobal = newCoord;
-
-          setRecordedRoute((prevRoute) => {
-            let shouldAdd = false;
-            let dist = 0;
-            if (recordedRouteGlobal.length === 0) {
-              shouldAdd = true;
-            } else {
-              const lastCoord = recordedRouteGlobal[recordedRouteGlobal.length - 1];
-              dist = getDistanceBetweenPoints(lastCoord, newCoord);
-              if (dist > 0.002) {
-                shouldAdd = true;
-              }
-            }
-
-            if (shouldAdd) {
-              recordedRouteGlobal.push(newCoord);
-              totalDistanceGlobal += dist;
-              setTotalDistance(totalDistanceGlobal);
-              console.log(`[ForegroundLocationFallback] Added point: Lat ${newCoord.latitude}, Lng ${newCoord.longitude}. Total points: ${recordedRouteGlobal.length}`);
-              return [...recordedRouteGlobal];
-            }
-            return prevRoute;
-          });
-        }
+        handleLocationUpdate
       );
     }
   };
@@ -314,6 +470,11 @@ export const useLocation = (currentLean?: number) => {
   // Stop route recording
   const stopRecording = () => {
     isRecordingGlobal = false;
+
+    // Set recording status inactive in storage
+    AsyncStorage.setItem(IS_RECORDING_STORAGE_KEY, 'false').catch((e) => {
+      console.warn('Failed to update recording status in storage:', e);
+    });
     
     if (locationSubscription.current) {
       locationSubscription.current.remove();
@@ -344,6 +505,13 @@ export const useLocation = (currentLean?: number) => {
     startTimeGlobal = null;
     lastLocationGlobal = null;
     
+    AsyncStorage.removeItem(ACTIVE_ROUTE_STORAGE_KEY).catch((e) => {
+      console.warn('Failed to remove active route in storage:', e);
+    });
+    AsyncStorage.setItem(IS_RECORDING_STORAGE_KEY, 'false').catch((e) => {
+      console.warn('Failed to clear recording status in storage:', e);
+    });
+
     setRecordedRoute([]);
     setTotalDistance(0);
     setSpeed(0);

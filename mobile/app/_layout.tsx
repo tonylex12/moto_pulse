@@ -30,6 +30,7 @@ import {
   Inter_700Bold 
 } from '@expo-google-fonts/inter';
 import { View, ActivityIndicator, Text, TextInput, StyleSheet, Platform } from 'react-native';
+import '../hooks/useLocation';
 
 const patchTextComponent = (Component: any, defaultFont: string) => {
   if (!Component) return;
