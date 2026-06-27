@@ -1629,9 +1629,15 @@ const LEAFLET_HTML = `
       attributionControl: false
     }).setView([19.4326, -99.1332], 13);
 
-    var osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
+    var googleRoads = L.tileLayer('https://{s}.google.com/vt/lyrs=m&hl=es&x={x}&y={y}&z={z}', {
+      maxZoom: 20,
+      subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+    });
     var dark = L.tileLayer('https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', { maxZoom: 19 });
-    var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 });
+    var googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=y&hl=es&x={x}&y={y}&z={z}', {
+      maxZoom: 20,
+      subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+    });
 
     var currentLayer = dark;
     currentLayer.addTo(map);
@@ -1666,9 +1672,9 @@ const LEAFLET_HTML = `
     window.setMapType = function(type, isDark) {
       map.removeLayer(currentLayer);
       if (type === 'hybrid') {
-        currentLayer = satellite;
+        currentLayer = googleHybrid;
       } else {
-        currentLayer = isDark ? dark : osm;
+        currentLayer = isDark ? dark : googleRoads;
       }
       currentLayer.addTo(map);
     };
