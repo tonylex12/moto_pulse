@@ -22,7 +22,7 @@ let totalDistanceGlobal = 0;
 let startTimeGlobal: number | null = null;
 let leanAngleGlobal = 0;
 let isRecordingGlobal = false;
-let lastLocationGlobal: Coordinate | null = null;
+let lastLocationGlobal: { latitude: number; longitude: number; timestamp: number; speed: number } | null = null;
 
 // Haversine formula to calculate distance between coordinates in km
 const getDistanceBetweenPoints = (coords1: Coordinate, coords2: Coordinate): number => {
@@ -74,16 +74,47 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
         
         const relativeTime = (currentTimestamp - activeRoute.startTime) / 1000;
         
-        // Directly use the OS/sensor speed from coordinates (converted from m/s to km/h)
+        // Calculate speed based on geodetic distance between coordinates
+        let calculatedSpeed = 0;
+        if (lastLocationGlobal && lastLocationGlobal.timestamp) {
+          const timeDiff = (currentTimestamp - lastLocationGlobal.timestamp) / 1000; // in seconds
+          const tempCoord = { latitude: location.coords.latitude, longitude: location.coords.longitude };
+          const dist = getDistanceBetweenPoints(lastLocationGlobal, tempCoord);
+          
+          if (dist <= 0.002 || timeDiff <= 0) {
+            calculatedSpeed = 0;
+          } else {
+            calculatedSpeed = (dist / timeDiff) * 3600;
+          }
+        }
+
+        // Determine final speed: prioritize OS sensor speed if available, otherwise fallback to calculated speed
+        let finalSpeed = 0;
         const gpsSpeed = location.coords.speed;
-        const speedKmh = (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed > 0)
-          ? Math.round(gpsSpeed * 3.6)
-          : 0;
+        if (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed > 0) {
+          finalSpeed = Math.round(gpsSpeed * 3.6);
+        } else {
+          finalSpeed = Math.round(calculatedSpeed);
+        }
+
+        // Apply strict filter to force speed to 0 if the user moved less than 2 meters since last update
+        if (lastLocationGlobal) {
+          const tempCoord = { latitude: location.coords.latitude, longitude: location.coords.longitude };
+          const dist = getDistanceBetweenPoints(lastLocationGlobal, tempCoord);
+          if (dist <= 0.002) {
+            finalSpeed = 0;
+          }
+        }
+
+        // Filter out extreme telemetry speed spikes (e.g. above 250 km/h)
+        if (finalSpeed > 250) {
+          finalSpeed = lastLocationGlobal ? lastLocationGlobal.speed : 0;
+        }
 
         const newCoord: Coordinate = {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
-          speed: speedKmh,
+          speed: finalSpeed,
           leanAngle: leanAngleGlobal,
           time: parseFloat(relativeTime.toFixed(1)),
         };
@@ -107,6 +138,14 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
           updated = true;
           console.log(`[BackgroundLocationTask] Added point: Lat ${newCoord.latitude}, Lng ${newCoord.longitude}. Total points: ${activeRoute.coordinates.length}`);
         }
+
+        // Update lastLocationGlobal on every location update to keep speed calculation continuous and smooth
+        lastLocationGlobal = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          timestamp: currentTimestamp,
+          speed: finalSpeed,
+        };
       }
 
       if (updated) {
@@ -340,22 +379,50 @@ export const useLocation = (currentLean?: number) => {
     
     const relativeTime = (currentTimestamp - startTimeGlobal) / 1000;
     
+    let calculatedSpeed = 0;
+    if (lastLocationGlobal && lastLocationGlobal.timestamp) {
+      const timeDiff = (currentTimestamp - lastLocationGlobal.timestamp) / 1000; // in seconds
+      const tempCoord = { latitude: location.coords.latitude, longitude: location.coords.longitude };
+      const dist = getDistanceBetweenPoints(lastLocationGlobal, tempCoord);
+      
+      if (dist <= 0.002 || timeDiff <= 0) {
+        calculatedSpeed = 0;
+      } else {
+        calculatedSpeed = (dist / timeDiff) * 3600;
+      }
+    }
+
+    let finalSpeed = 0;
     const gpsSpeed = location.coords.speed;
-    const speedKmh = (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed > 0) 
-      ? Math.round(gpsSpeed * 3.6) 
-      : 0;
-    setSpeed(speedKmh);
+    if (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed > 0) {
+      finalSpeed = Math.round(gpsSpeed * 3.6);
+    } else {
+      finalSpeed = Math.round(calculatedSpeed);
+    }
+
+    if (lastLocationGlobal) {
+      const tempCoord = { latitude: location.coords.latitude, longitude: location.coords.longitude };
+      const dist = getDistanceBetweenPoints(lastLocationGlobal, tempCoord);
+      if (dist <= 0.002) {
+        finalSpeed = 0;
+      }
+    }
+
+    if (finalSpeed > 250) {
+      finalSpeed = lastLocationGlobal ? lastLocationGlobal.speed : 0;
+    }
+
+    setSpeed(finalSpeed);
 
     const newCoord: Coordinate = {
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
-      speed: speedKmh,
+      speed: finalSpeed,
       leanAngle: leanRef.current,
       time: parseFloat(relativeTime.toFixed(1)),
     };
 
     setCurrentLocation(newCoord);
-    lastLocationGlobal = newCoord;
 
     setRecordedRoute((prevRoute) => {
       let shouldAdd = false;
@@ -387,6 +454,14 @@ export const useLocation = (currentLean?: number) => {
       }
       return prevRoute;
     });
+
+    // Update lastLocationGlobal on every location update
+    lastLocationGlobal = {
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+      timestamp: currentTimestamp,
+      speed: finalSpeed,
+    };
   };
 
   // Start route recording
