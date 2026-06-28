@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT, UrlTile } from 'react-native-maps';
 import { WebView } from 'react-native-webview';
-import { Play, Square, Navigation, Bookmark, X, Eye, Trash2, Video } from 'lucide-react-native';
+import { Play, Square, Navigation, Bookmark, X, Eye, Trash2, Video, Settings } from 'lucide-react-native';
 import { Accelerometer } from 'expo-sensors';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import Svg, { Path, Circle, Line, Text as SvgText, Defs, LinearGradient, Stop, G } from 'react-native-svg';
 
 // Safe load of expo-media-library to prevent runtime crash in environments where the native module is not compiled yet
 let MediaLibrary: any = null;
@@ -51,6 +52,18 @@ export default function RoutesMapScreen() {
   const [maxSpeed, setMaxSpeed] = useState(0);
   const [simSpeed, setSimSpeed] = useState(0);
   const [simLean, setSimLean] = useState(0);
+
+  // Manual Inclinometer Calibration States & Refs
+  const [manualCalibrationOffset, setManualCalibrationOffset] = useState(0);
+  const calibrationOffsetRef = useRef(0);
+  const rawLeanRef = useRef(0);
+
+  // Acceleration/G-force Telemetry States & Refs
+  const [acceleration, setAcceleration] = useState(0);
+  const [maxAccel, setMaxAccel] = useState(0);
+  const [maxDecel, setMaxDecel] = useState(0);
+  const lastSpeedForAccelRef = useRef(0);
+  const lastSpeedTimeRef = useRef(Date.now());
 
   const {
     currentLocation,
@@ -98,6 +111,24 @@ export default function RoutesMapScreen() {
   const [playbackRoute, setPlaybackRoute] = useState<SavedRoute | null>(null);
   const [playbackSpeed, setPlaybackSpeed] = useState(0);
   const [playbackLean, setPlaybackLean] = useState(0);
+  
+  // Video Playback Acceleration/Deceleration Tracking
+  const lastPlaybackSpeedRef = useRef(0);
+  const lastPlaybackSpeedTimeRef = useRef(Date.now());
+  const [playbackAccel, setPlaybackAccel] = useState(0);
+
+  useEffect(() => {
+    const now = Date.now();
+    const timeDiff = (now - lastPlaybackSpeedTimeRef.current) / 1000;
+    if (timeDiff > 0.5) {
+      const currentSpeedMps = playbackSpeed / 3.6;
+      const prevSpeedMps = lastPlaybackSpeedRef.current / 3.6;
+      const calculated = timeDiff > 0 ? (currentSpeedMps - prevSpeedMps) / timeDiff : 0;
+      setPlaybackAccel(parseFloat(calculated.toFixed(1)));
+      lastPlaybackSpeedRef.current = playbackSpeed;
+      lastPlaybackSpeedTimeRef.current = now;
+    }
+  }, [playbackSpeed]);
   const [isPlayingVideo, setIsPlayingVideo] = useState(false);
   const [playbackTime, setPlaybackTime] = useState(0);
   const [playbackDuration, setPlaybackDuration] = useState(0);
@@ -330,6 +361,49 @@ export default function RoutesMapScreen() {
     };
   }, []);
 
+  // Load manual calibration offset from AsyncStorage on mount
+  useEffect(() => {
+    AsyncStorage.getItem('@motopulse_lean_calibration_offset')
+      .then((val) => {
+        if (val !== null) {
+          const offset = parseFloat(val);
+          calibrationOffsetRef.current = offset;
+          setManualCalibrationOffset(offset);
+          console.log('[Telemetry] Loaded manual lean calibration offset:', offset);
+        }
+      })
+      .catch((e) => console.warn('Failed to load manual calibration offset:', e));
+  }, []);
+
+  // Manual Calibration trigger
+  const handleCalibrateLean = async () => {
+    // Current raw Lean (before offset subtraction) is rawLeanRef.current.
+    // Setting offset to current raw Lean will result in calibrated value being 0!
+    const currentRaw = rawLeanRef.current;
+    calibrationOffsetRef.current = currentRaw;
+    setManualCalibrationOffset(currentRaw);
+    
+    // Reset all peak telemetry metrics to 0
+    setMaxLeftLean(0);
+    setMaxRightLean(0);
+    setMaxSpeed(0);
+    setAcceleration(0);
+    setMaxAccel(0);
+    setMaxDecel(0);
+    lastSpeedForAccelRef.current = 0;
+    lastSpeedTimeRef.current = Date.now();
+    
+    try {
+      await AsyncStorage.setItem('@motopulse_lean_calibration_offset', currentRaw.toString());
+      Alert.alert(
+        'Calibración y Telemetría Reseteada', 
+        'El inclinómetro se calibró a 0° y todos los picos de velocidad, inclinación y aceleración se reiniciaron.'
+      );
+    } catch (e) {
+      console.warn('Failed to save manual lean calibration offset:', e);
+    }
+  };
+
   // Synchronize refs for speed and simSpeed to avoid capturing stale values in sensor listeners
   const speedRef = useRef(0);
   const simSpeedRef = useRef(0);
@@ -342,9 +416,9 @@ export default function RoutesMapScreen() {
     simSpeedRef.current = simSpeed;
   }, [simSpeed]);
 
-  // Native Accelerometer listener when active recording and available
+  // Native Accelerometer listener when screen is mounted and available
   useEffect(() => {
-    if (!isRecording || !hasAccelerometer || Platform.OS === 'web') return;
+    if (!hasAccelerometer || Platform.OS === 'web') return;
 
     Accelerometer.setUpdateInterval(100); // 10Hz updates
 
@@ -368,15 +442,19 @@ export default function RoutesMapScreen() {
       // Read current speed from ref to ensure up-to-date value without effect re-subscription
       const currentSpeed = speedRef.current;
 
-      // Self-calibration: when we first start moving (speed > 5 km/h), set this as the zero reference offset
-      if (!isCalibrated && currentSpeed > 5) {
-        calibrationOffset = smoothedLean;
+      // Set raw lean reference for manual calibration (uses current smoothed value before tare)
+      rawLeanRef.current = smoothedLean;
+
+      // Self-calibration fallback: when we first start moving (speed > 5 km/h) and manual calibration hasn't been set (is 0)
+      if (!isCalibrated && currentSpeed > 5 && calibrationOffsetRef.current === 0) {
+        calibrationOffsetRef.current = smoothedLean;
+        setManualCalibrationOffset(smoothedLean);
         isCalibrated = true;
-        console.log('Telemetry calibrated. Offset set to:', calibrationOffset);
+        console.log('Telemetry auto-calibrated. Offset set to:', smoothedLean);
       }
 
-      // Apply calibration offset
-      const calibratedLean = smoothedLean - calibrationOffset;
+      // Apply calibration offset (either manual or auto-calibrated)
+      const calibratedLean = smoothedLean - calibrationOffsetRef.current;
 
       const roundedLean = Math.round(calibratedLean);
       const clampedLean = Math.max(-60, Math.min(60, roundedLean));
@@ -398,7 +476,7 @@ export default function RoutesMapScreen() {
     return () => {
       subscription.remove();
     };
-  }, [isRecording, hasAccelerometer]);
+  }, [hasAccelerometer]);
 
   // Simulated Telemetry logic (web/simulator fallback)
   useEffect(() => {
@@ -442,14 +520,38 @@ export default function RoutesMapScreen() {
     return () => clearInterval(interval);
   }, [isRecording, hasAccelerometer]);
 
-  // Track peak speed during recording
+  // Track peak speed and calculate real-time acceleration during recording
   useEffect(() => {
-    if (!isRecording) return;
+    if (!isRecording) {
+      setAcceleration(0);
+      return;
+    }
     const currentSpeed = (Platform.OS === 'web' || hasAccelerometer === false) ? simSpeed : speed;
     if (currentSpeed > maxSpeed) {
       setMaxSpeed(currentSpeed);
     }
-  }, [speed, simSpeed, isRecording, maxSpeed]);
+
+    const now = Date.now();
+    const timeDiffSec = (now - lastSpeedTimeRef.current) / 1000;
+    if (timeDiffSec > 0.5) {
+      const currentSpeedMps = currentSpeed / 3.6;
+      const prevSpeedMps = lastSpeedForAccelRef.current / 3.6;
+      const rawAccel = (currentSpeedMps - prevSpeedMps) / timeDiffSec; // in m/s2
+      
+      // Smooth the acceleration to filter noise
+      const newAccel = parseFloat((acceleration * 0.7 + rawAccel * 0.3).toFixed(1));
+      setAcceleration(newAccel);
+      
+      if (newAccel > 0) {
+        setMaxAccel((prev) => parseFloat(Math.max(prev, newAccel).toFixed(1)));
+      } else if (newAccel < 0) {
+        setMaxDecel((prev) => parseFloat(Math.min(prev, newAccel).toFixed(1)));
+      }
+      
+      lastSpeedForAccelRef.current = currentSpeed;
+      lastSpeedTimeRef.current = now;
+    }
+  }, [speed, simSpeed, isRecording, maxSpeed, acceleration]);
 
   // Simple blinking state for GPS/Video recording indicators to avoid NativeWind CSSInterop animation warnings
   const [hudBlink, setHudBlink] = useState(true);
@@ -516,6 +618,11 @@ export default function RoutesMapScreen() {
     setMaxSpeed(0);
     setSimLean(0);
     setSimSpeed(0);
+    setAcceleration(0);
+    setMaxAccel(0);
+    setMaxDecel(0);
+    lastSpeedForAccelRef.current = 0;
+    lastSpeedTimeRef.current = Date.now();
     await startRecording();
 
     // Start recording video if in camera mode
@@ -724,6 +831,495 @@ export default function RoutesMapScreen() {
     );
   };
 
+  const renderBikeSensorDashboard = (
+    currentSpeed: number,
+    currentLean: number,
+    leftMax: number,
+    rightMax: number,
+    tripDist: number,
+    peakSpeed: number,
+    currentAccel: number,
+    peakAccel: number,
+    peakDecel: number,
+    isConnected: boolean,
+    isPlaybackMode = false,
+    isMiniMode = false,
+    scale = 1.0
+  ) => {
+    // Helper math functions for SVG polar coordinates
+    const polarToX = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
+      const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0;
+      return centerX + radius * Math.cos(angleInRadians);
+    };
+
+    const polarToY = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
+      const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0;
+      return centerY + radius * Math.sin(angleInRadians);
+    };
+
+    const getArcPath = (cx: number, cy: number, r: number, startAngle: number, endAngle: number) => {
+      const startX = polarToX(cx, cy, r, startAngle);
+      const startY = polarToY(cx, cy, r, startAngle);
+      const endX = polarToX(cx, cy, r, endAngle);
+      const endY = polarToY(cx, cy, r, endAngle);
+      const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+      return `M ${startX} ${startY} A ${r} ${r} 0 ${largeArcFlag} 1 ${endX} ${endY}`;
+    };
+
+    // Parameters of layout
+    const cx = 150;
+    const cy = 160;
+    const rLean = 100;
+    const rOuter = 85;
+
+    // Needle and max peak calculations
+    // 0 tilt is straight up, which maps to 0 degrees of the top arc.
+    // The top arc spans from -50 (left tilt) to +50 (right tilt).
+    const needleAngle = currentLean;
+    const leftMaxAngle = -leftMax;
+    const rightMaxAngle = rightMax;
+
+    // Speed arc calculation (0 to 250)
+    // Left side spans from -135 degrees (bottom left) to -45 degrees (top left)
+    const speedPercent = Math.min(1, currentSpeed / 250);
+    const speedStartAngle = -135;
+    const speedEndAngle = -135 + speedPercent * 90; // spans 90 degrees total
+
+    // Accel arc calculation (from -6.0 to +6.0 m/s2)
+    // Right side spans from 135 degrees (bottom right, decel) to 45 degrees (top right, accel)
+    // Middle/Zero is 90 degrees (right horizontal)
+    const accelVal = Math.max(-6, Math.min(6, currentAccel));
+    const accelStartAngle = 90; // zero reference
+    const accelEndAngle = 90 - (accelVal / 6.0) * 45; // goes up to 45 degrees or down to 135 degrees
+
+    return (
+      <View 
+        className={isMiniMode 
+          ? "bg-[#0F1216]/95 border border-[#202630]/60 rounded-2xl p-2 items-center justify-center relative"
+          : "bg-[#0F1216]/95 border border-[#202630] rounded-3xl p-3 items-center justify-center relative self-center"
+        }
+        style={isMiniMode ? {
+          width: 160,
+          height: 142,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.4,
+          shadowRadius: 6,
+          elevation: 6,
+        } : {
+          width: 320 * scale,
+          height: 335 * scale,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.5,
+          shadowRadius: 10,
+          elevation: 10,
+        }}
+      >
+        <Svg width={isMiniMode ? 150 : 300 * scale} height={isMiniMode ? 132.5 : 265 * scale} viewBox="0 0 300 265">
+          <Defs>
+            {/* Lean Gradient */}
+            <LinearGradient id="leanGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <Stop offset="0%" stopColor="#EF4444" />
+              <Stop offset="20%" stopColor="#F59E0B" />
+              <Stop offset="50%" stopColor="#10B981" />
+              <Stop offset="80%" stopColor="#F59E0B" />
+              <Stop offset="100%" stopColor="#EF4444" />
+            </LinearGradient>
+
+            {/* Speed Arc Gradient */}
+            <LinearGradient id="speedGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+              <Stop offset="0%" stopColor="#005A9C" />
+              <Stop offset="100%" stopColor="#00E5FF" />
+            </LinearGradient>
+
+            {/* Acceleration Arc Gradient */}
+            <LinearGradient id="accelGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+              <Stop offset="0%" stopColor="#F59E0B" />
+              <Stop offset="100%" stopColor="#10B981" />
+            </LinearGradient>
+          </Defs>
+
+          {/* === TOP LEAN GAUGE === */}
+          {/* Background Track */}
+          <Path 
+            d={getArcPath(cx, cy, rLean, -50, 50)} 
+            fill="none" 
+            stroke="#1A202C" 
+            strokeWidth={10} 
+            strokeLinecap="round" 
+          />
+          {/* Gradient Visual Layer */}
+          <Path 
+            d={getArcPath(cx, cy, rLean, -50, 50)} 
+            fill="none" 
+            stroke="url(#leanGrad)" 
+            strokeWidth={8} 
+            strokeLinecap="round" 
+            opacity={0.8}
+          />
+          {/* Center Zero Marker */}
+          <Line 
+            x1={polarToX(cx, cy, rLean - 8, 0)} 
+            y1={polarToY(cx, cy, rLean - 8, 0)} 
+            x2={polarToX(cx, cy, rLean + 8, 0)} 
+            y2={polarToY(cx, cy, rLean + 8, 0)} 
+            stroke="#FFFFFF" 
+            strokeWidth={2} 
+          />
+          
+          {/* Standard scale ticks */}
+          {[-30, 30].map((tick) => (
+            <G key={`lean-tick-${tick}`}>
+              <Line 
+                x1={polarToX(cx, cy, rLean - 5, tick)} 
+                y1={polarToY(cx, cy, rLean - 5, tick)} 
+                x2={polarToX(cx, cy, rLean + 5, tick)} 
+                y2={polarToY(cx, cy, rLean + 5, tick)} 
+                stroke="#A0AEC0" 
+                strokeWidth={1.5} 
+              />
+              <SvgText
+                x={polarToX(cx, cy, rLean + 14, tick)}
+                y={polarToY(cx, cy, rLean + 14, tick) + 3}
+                fill="#8F9CAE"
+                fontSize={9}
+                fontWeight="bold"
+                textAnchor="middle"
+              >
+                {Math.abs(tick)}
+              </SvgText>
+            </G>
+          ))}
+
+          {/* Current Lean Needle */}
+          <Line 
+            x1={polarToX(cx, cy, rLean - 10, needleAngle)} 
+            y1={polarToY(cx, cy, rLean - 10, needleAngle)} 
+            x2={polarToX(cx, cy, rLean + 10, needleAngle)} 
+            y2={polarToY(cx, cy, rLean + 10, needleAngle)} 
+            stroke="#FFFFFF" 
+            strokeWidth={3.5} 
+            strokeLinecap="round" 
+          />
+
+          {/* Max Left Peak Marker */}
+          {leftMax > 0 && (
+            <G>
+              <Line 
+                x1={polarToX(cx, cy, rLean - 8, leftMaxAngle)} 
+                y1={polarToY(cx, cy, rLean - 8, leftMaxAngle)} 
+                x2={polarToX(cx, cy, rLean + 8, leftMaxAngle)} 
+                y2={polarToY(cx, cy, rLean + 8, leftMaxAngle)} 
+                stroke="#EF4444" 
+                strokeWidth={2.5} 
+              />
+              <SvgText
+                x={polarToX(cx, cy, rLean - 20, leftMaxAngle)}
+                y={polarToY(cx, cy, rLean - 20, leftMaxAngle) + 4}
+                fill="#EF4444"
+                fontSize={12}
+                fontWeight="bold"
+                textAnchor="middle"
+              >
+                {leftMax}°
+              </SvgText>
+            </G>
+          )}
+
+          {/* Max Right Peak Marker */}
+          {rightMax > 0 && (
+            <G>
+              <Line 
+                x1={polarToX(cx, cy, rLean - 8, rightMaxAngle)} 
+                y1={polarToY(cx, cy, rLean - 8, rightMaxAngle)} 
+                x2={polarToX(cx, cy, rLean + 8, rightMaxAngle)} 
+                y2={polarToY(cx, cy, rLean + 8, rightMaxAngle)} 
+                stroke="#10B981" 
+                strokeWidth={2.5} 
+              />
+              <SvgText
+                x={polarToX(cx, cy, rLean + 20, rightMaxAngle)}
+                y={polarToY(cx, cy, rLean + 20, rightMaxAngle) + 4}
+                fill="#10B981"
+                fontSize={12}
+                fontWeight="bold"
+                textAnchor="middle"
+              >
+                {rightMax}°
+              </SvgText>
+            </G>
+          )}
+
+          {/* Current Lean text HUD */}
+          <SvgText
+            x={cx}
+            y={cy - 74}
+            fill="#10B981"
+            fontSize={20}
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            {Math.abs(currentLean)}°
+          </SvgText>
+
+
+          {/* === CENTER DIAL FRAME === */}
+          <Circle 
+            cx={cx} 
+            cy={cy} 
+            r={70} 
+            fill="#0F1216" 
+            stroke="#202630" 
+            strokeWidth={3} 
+          />
+          {/* Divider Line in the middle of Speed Dial */}
+          <Line
+            x1={cx - 50}
+            y1={cy + 8}
+            x2={cx + 50}
+            y2={cy + 8}
+            stroke="#202630"
+            strokeWidth={1.5}
+          />
+
+          {/* Speed display */}
+          <SvgText
+            x={cx}
+            y={cy - 12}
+            fill="#FFFFFF"
+            fontSize={38}
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            {currentSpeed}
+          </SvgText>
+          <SvgText
+            x={cx}
+            y={cy + 2}
+            fill="#8F9CAE"
+            fontSize={9}
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            km/h
+          </SvgText>
+
+          {/* Trip text */}
+          <SvgText
+            x={cx}
+            y={cy + 22}
+            fill="#8F9CAE"
+            fontSize={8}
+            textAnchor="middle"
+          >
+            Trip(km)
+          </SvgText>
+          <SvgText
+            x={cx}
+            y={cy + 36}
+            fill="#FFFFFF"
+            fontSize={12}
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            {tripDist.toFixed(1)}
+          </SvgText>
+
+          {/* Max Speed text */}
+          <SvgText
+            x={cx}
+            y={cy + 48}
+            fill="#8F9CAE"
+            fontSize={7.5}
+            textAnchor="middle"
+          >
+            max Speed
+          </SvgText>
+          <SvgText
+            x={cx}
+            y={cy + 60}
+            fill="#FFFFFF"
+            fontSize={10.5}
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            {Math.round(peakSpeed)}
+          </SvgText>
+
+
+          {/* === LEFT SPEED PROGRESS ARC === */}
+          {/* Background track */}
+          <Path 
+            d={getArcPath(cx, cy, rOuter, -135, -45)} 
+            fill="none" 
+            stroke="#1A202C" 
+            strokeWidth={6} 
+            strokeLinecap="round" 
+          />
+          {/* Active speed path */}
+          {speedPercent > 0 && (
+            <Path 
+              d={getArcPath(cx, cy, rOuter, -135, speedEndAngle)} 
+              fill="none" 
+              stroke="url(#speedGrad)" 
+              strokeWidth={6} 
+              strokeLinecap="round" 
+            />
+          )}
+
+          {/* Speed Scale Ticks & Labels */}
+          {[-135, -105, -75, -45].map((angle, index) => {
+            const speedValues = [0, 100, 200, 250];
+            const val = speedValues[index];
+            return (
+              <G key={`speed-tick-${val}`}>
+                <Line
+                  x1={polarToX(cx, cy, rOuter - 4, angle)}
+                  y1={polarToY(cx, cy, rOuter - 4, angle)}
+                  x2={polarToX(cx, cy, rOuter + 4, angle)}
+                  y2={polarToY(cx, cy, rOuter + 4, angle)}
+                  stroke="#202630"
+                  strokeWidth={1.5}
+                />
+                <SvgText
+                  x={polarToX(cx, cy, rOuter - 14, angle)}
+                  y={polarToY(cx, cy, rOuter - 14, angle) + 3}
+                  fill="#8F9CAE"
+                  fontSize={8}
+                  fontWeight="bold"
+                  textAnchor="middle"
+                >
+                  {val}
+                </SvgText>
+              </G>
+            );
+          })}
+
+
+          {/* === RIGHT ACCEL/DECEL PROGRESS ARC === */}
+          {/* Background track */}
+          <Path 
+            d={getArcPath(cx, cy, rOuter, 45, 135)} 
+            fill="none" 
+            stroke="#1A202C" 
+            strokeWidth={6} 
+            strokeLinecap="round" 
+          />
+          {/* Active acceleration/braking path */}
+          {accelVal > 0 ? (
+            // Accelerating (towards top right 45deg, starting from zero at 90deg)
+            <Path 
+              d={getArcPath(cx, cy, rOuter, accelEndAngle, 90)} 
+              fill="none" 
+              stroke="url(#accelGrad)" 
+              strokeWidth={6} 
+              strokeLinecap="round" 
+            />
+          ) : accelVal < 0 ? (
+            // Braking (towards bottom right 135deg, starting from zero at 90deg)
+            <Path 
+              d={getArcPath(cx, cy, rOuter, 90, accelEndAngle)} 
+              fill="none" 
+              stroke="#EF4444" 
+              strokeWidth={6} 
+              strokeLinecap="round" 
+            />
+          ) : null}
+
+          {/* Accel Scale Ticks & Labels */}
+          {[45, 90, 135].map((angle, index) => {
+            const labels = ['5.2', '0', '-4.9'];
+            return (
+              <G key={`accel-tick-${index}`}>
+                <Line
+                  x1={polarToX(cx, cy, rOuter - 4, angle)}
+                  y1={polarToY(cx, cy, rOuter - 4, angle)}
+                  x2={polarToX(cx, cy, rOuter + 4, angle)}
+                  y2={polarToY(cx, cy, rOuter + 4, angle)}
+                  stroke="#202630"
+                  strokeWidth={1.5}
+                />
+                <SvgText
+                  x={polarToX(cx, cy, rOuter + 14, angle)}
+                  y={polarToY(cx, cy, rOuter + 14, angle) + 3}
+                  fill="#8F9CAE"
+                  fontSize={7.5}
+                  fontWeight="bold"
+                  textAnchor="middle"
+                >
+                  {labels[index]}
+                </SvgText>
+              </G>
+            );
+          })}
+
+          {/* Current acceleration text unit label overlay in the middle of right arc */}
+          <SvgText
+            x={polarToX(cx, cy, rOuter + 28, 90)}
+            y={polarToY(cx, cy, rOuter + 28, 90) + 3}
+            fill={accelVal > 0 ? '#10B981' : accelVal < 0 ? '#EF4444' : '#8F9CAE'}
+            fontSize={8}
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            {accelVal > 0 ? `+${accelVal}` : accelVal} m/s²
+          </SvgText>
+        </Svg>
+
+        {!isMiniMode && (
+          <View 
+            className="flex-row items-center justify-between w-full border-t border-[#202630]/60 px-2"
+            style={{
+              marginTop: Math.max(2, 6 * scale),
+              paddingTop: Math.max(6, 12 * scale),
+            }}
+          >
+            <View className="flex-row items-center">
+              <View 
+                className={`w-1.5 h-1.5 rounded-full mr-1.5 ${isConnected ? 'bg-[#00E5FF]' : 'bg-[#EF4444]'}`}
+                style={{
+                  shadowColor: isConnected ? '#00E5FF' : '#EF4444',
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.8,
+                  shadowRadius: 3,
+                }}
+              />
+              <Text 
+                className="text-[#8F9CAE] font-bold uppercase tracking-wider"
+                style={{ fontSize: Math.max(7, 8.5 * scale) }}
+              >
+                {isPlaybackMode 
+                  ? 'REPRODUCCIÓN' 
+                  : isRecording 
+                    ? 'GRABANDO RUTA' 
+                    : isConnected 
+                      ? 'PREPARADO - TELEMETRÍA' 
+                      : 'PREPARADO - SIMULADOR'}
+              </Text>
+            </View>
+
+            {!isPlaybackMode && !isRecording && (
+              <TouchableOpacity 
+                onPress={handleCalibrateLean}
+                className="bg-[#202630] border border-[#2D3748] rounded-full flex-row items-center"
+                style={{
+                  paddingHorizontal: Math.max(6, 10 * scale),
+                  paddingVertical: Math.max(3, 5 * scale)
+                }}
+              >
+                <Settings size={Math.max(8, 10 * scale)} color="#00E5FF" className="mr-1" />
+                <Text style={{ fontSize: Math.max(8, 10 * scale), color: '#00E5FF', fontWeight: 'bold' }}>
+                  CALIBRAR CERO
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView className={`flex-1 ${colors.bg}`}>
       <View style={{ flex: 1, flexDirection: 'column', position: 'relative' }}>
@@ -826,89 +1422,23 @@ export default function RoutesMapScreen() {
               mute={!microphonePermission?.granted}
             />
 
-            {/* Telemetry HUD floating on top of camera preview (rendered as absolute sibling) */}
-            {isRecording && (
-              <View 
-                className="absolute inset-x-4 top-4 bg-[#0F1216]/95 border border-[#00A3E0]/30 rounded-2xl p-4 flex-row items-center justify-between z-20"
-                style={{
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 6 },
-                  shadowOpacity: 0.4,
-                  shadowRadius: 8,
-                  elevation: 8
-                }}
-              >
-                {/* Speedometer */}
-                <View className="flex-col justify-center items-center px-2">
-                  <Text className="text-[#8F9CAE] text-[9px] font-barlow-condensed-bold font-bold uppercase tracking-wider">VELOCIDAD</Text>
-                  <View className="flex-row items-baseline mt-1">
-                    <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 32, color: '#FFFFFF', lineHeight: 36 }}>
-                      {Platform.OS === 'web' || !hasAccelerometer ? simSpeed : speed}
-                    </Text>
-                    <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 9, color: '#00A3E0', marginLeft: 4 }}>KM/H</Text>
-                  </View>
-                </View>
-
-                {/* Visual Lean Indicator Gauge */}
-                <View className="flex-col items-center justify-center border-l border-r border-[#202630] px-4 flex-1">
-                  <Text className="text-[#8F9CAE] text-[9px] font-barlow-condensed-bold font-bold uppercase tracking-wider mb-1.5">INCLINACIÓN</Text>
-                  
-                  <View className="flex-row items-center justify-between w-full">
-                    {/* Left Max */}
-                    <View className="items-center">
-                      <Text className="text-[#8F9CAE] text-[8px] font-barlow-condensed-bold font-bold">MÁX I</Text>
-                      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 15, color: '#FF3B30' }}>{maxLeftLean}°</Text>
-                    </View>
-
-                    {/* Rotating Horizon / Attitude Indicator */}
-                    <View className="items-center justify-center relative w-14 h-14">
-                      <View className="absolute w-12 h-12 rounded-full border border-dashed border-[#8F9CAE]/20" />
-                      <View 
-                        style={{ 
-                          transform: [{ rotate: `${Platform.OS === 'web' || !hasAccelerometer ? simLean : leanAngle}deg` }] 
-                        }}
-                        className="items-center justify-center"
-                      >
-                        <View className="w-9 h-0.5 bg-[#8F9CAE]/30 absolute" />
-                        <View className="w-5 h-1.5 bg-[#00A3E0] rounded-full items-center justify-center">
-                          <View className="w-1.5 h-1.5 bg-[#FFFFFF] rounded-full" />
-                        </View>
-                      </View>
-                      <View className="absolute bottom-[-4px] bg-[#0F1216] px-1 py-0.5 rounded border border-[#202630]">
-                        <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 10, color: '#00E5FF' }}>
-                          {Math.abs(Platform.OS === 'web' || !hasAccelerometer ? simLean : leanAngle)}°
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Right Max */}
-                    <View className="items-center">
-                      <Text className="text-[#8F9CAE] text-[8px] font-barlow-condensed-bold font-bold">MÁX D</Text>
-                      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 15, color: '#34C759' }}>{maxRightLean}°</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Active Telemetry Status */}
-                <View className="flex-col justify-center items-center px-2">
-                  <Text className="text-[#8F9CAE] text-[9px] font-barlow-condensed-bold font-bold uppercase tracking-wider">ESTADO</Text>
-                  <View className="items-center mt-2">
-                    <View 
-                      className="w-2 h-2 rounded-full bg-[#00E5FF] mb-1" 
-                      style={{
-                        shadowColor: '#00E5FF',
-                        shadowOffset: { width: 0, height: 0 },
-                        shadowOpacity: 0.8,
-                        shadowRadius: 4,
-                      }}
-                    />
-                    <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 8, color: '#00E5FF', letterSpacing: 0.5 }}>
-                      {Platform.OS === 'web' || !hasAccelerometer ? 'SIMULADO' : 'CONECTADO'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            )}
+            {/* Telemetry HUD floating on top of camera preview (top left, 1/4 scaled) */}
+            <View className="absolute top-4 left-4 z-20">
+              {renderBikeSensorDashboard(
+                Platform.OS === 'web' || !hasAccelerometer ? simSpeed : speed,
+                Platform.OS === 'web' || !hasAccelerometer ? simLean : leanAngle,
+                maxLeftLean,
+                maxRightLean,
+                totalDistance,
+                maxSpeed,
+                acceleration,
+                maxAccel,
+                maxDecel,
+                Platform.OS !== 'web' && hasAccelerometer === true,
+                false, // isPlaybackMode
+                true   // isMiniMode (1/4 size)
+              )}
+            </View>
 
             {/* Guide Overlay for camera framing (rendered as absolute sibling) */}
             {!isRecording && (
@@ -1003,93 +1533,30 @@ export default function RoutesMapScreen() {
         </TouchableOpacity>
 
         {/* Telemetry TFT HUD Overlay */}
-        {!cameraModeActive && isRecording && (
+        {!cameraModeActive && (
           <View 
-            className="absolute bottom-24 left-6 right-6 z-10 bg-[#0F1216]/95 border border-[#00A3E0]/30 rounded-2xl p-4 flex-row items-center justify-between"
             style={{
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: 0.4,
-              shadowRadius: 8,
-              elevation: 8
+              position: 'absolute',
+              bottom: 96,
+              alignSelf: 'center',
+              zIndex: 10
             }}
           >
-            {/* Speedometer */}
-            <View className="flex-col justify-center items-center px-2">
-              <Text className="text-[#8F9CAE] text-[9px] font-barlow-condensed-bold font-bold uppercase tracking-wider">VELOCIDAD</Text>
-              <View className="flex-row items-baseline mt-1">
-                <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 32, color: '#FFFFFF', lineHeight: 36 }}>
-                  {Platform.OS === 'web' || !hasAccelerometer ? simSpeed : speed}
-                </Text>
-                <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 9, color: '#00A3E0', marginLeft: 4 }}>KM/H</Text>
-              </View>
-            </View>
-
-            {/* Visual Lean Indicator Gauge */}
-            <View className="flex-col items-center justify-center border-l border-r border-[#202630] px-4 flex-1">
-              <Text className="text-[#8F9CAE] text-[9px] font-barlow-condensed-bold font-bold uppercase tracking-wider mb-1.5">INCLINACIÓN</Text>
-              
-              <View className="flex-row items-center justify-between w-full">
-                {/* Left Max */}
-                <View className="items-center">
-                  <Text className="text-[#8F9CAE] text-[8px] font-barlow-condensed-bold font-bold">MÁX I</Text>
-                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 15, color: '#FF3B30' }}>{maxLeftLean}°</Text>
-                </View>
-
-                {/* Rotating Horizon / Attitude Indicator */}
-                <View className="items-center justify-center relative w-14 h-14">
-                  {/* Outer Circular Scale */}
-                  <View className="absolute w-12 h-12 rounded-full border border-dashed border-[#8F9CAE]/20" />
-                  
-                  {/* Tilting Indicator */}
-                  <View 
-                    style={{ 
-                      transform: [{ rotate: `${Platform.OS === 'web' || !hasAccelerometer ? simLean : leanAngle}deg` }] 
-                    }}
-                    className="items-center justify-center"
-                  >
-                    {/* Horizon line */}
-                    <View className="w-9 h-0.5 bg-[#8F9CAE]/30 absolute" />
-                    {/* Inner circle marker */}
-                    <View className="w-5 h-1.5 bg-[#00A3E0] rounded-full items-center justify-center">
-                      <View className="w-1 h-1 bg-[#FFFFFF] rounded-full" />
-                    </View>
-                  </View>
-
-                  {/* Current Lean Angle Text overlaid at the bottom */}
-                  <View className="absolute bottom-[-4px] bg-[#0F1216] px-1 py-0.5 rounded border border-[#202630]">
-                    <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 10, color: '#00E5FF' }}>
-                      {Math.abs(Platform.OS === 'web' || !hasAccelerometer ? simLean : leanAngle)}°
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Right Max */}
-                <View className="items-center">
-                  <Text className="text-[#8F9CAE] text-[8px] font-barlow-condensed-bold font-bold">MÁX D</Text>
-                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 15, color: '#34C759' }}>{maxRightLean}°</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Active Telemetry Status */}
-            <View className="flex-col justify-center items-center px-2">
-              <Text className="text-[#8F9CAE] text-[9px] font-barlow-condensed-bold font-bold uppercase tracking-wider">ESTADO</Text>
-              <View className="items-center mt-2">
-                <View 
-                  className="w-2 h-2 rounded-full bg-[#00E5FF] mb-1" 
-                  style={{
-                    shadowColor: '#00E5FF',
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 0.8,
-                    shadowRadius: 4,
-                  }}
-                />
-                <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 8, color: '#00E5FF', letterSpacing: 0.5 }}>
-                  {Platform.OS === 'web' || !hasAccelerometer ? 'SIMULADO' : 'CONECTADO'}
-                </Text>
-              </View>
-            </View>
+            {renderBikeSensorDashboard(
+              Platform.OS === 'web' || !hasAccelerometer ? simSpeed : speed,
+              Platform.OS === 'web' || !hasAccelerometer ? simLean : leanAngle,
+              maxLeftLean,
+              maxRightLean,
+              totalDistance,
+              maxSpeed,
+              acceleration,
+              maxAccel,
+              maxDecel,
+              Platform.OS !== 'web' && hasAccelerometer === true,
+              false, // isPlaybackMode
+              false, // isMiniMode
+              0.8    // scale (reduced by 20%)
+            )}
           </View>
         )}
 
@@ -1487,36 +1954,21 @@ export default function RoutesMapScreen() {
               paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 24
             }}
           >
-            {/* Speed and Lean HUD (BMW TFT style overlay) */}
-            <View className="flex-row justify-around items-center mb-6">
-              {/* Speedometer */}
-              <View className="items-center bg-black/40 border border-white/10 rounded-2xl p-4 min-w-[120px]">
-                <Text className="text-gray-400 font-barlow-condensed-bold text-xs uppercase tracking-wider">VELOCIDAD</Text>
-                <Text className="text-white font-bold text-4xl font-orbitron">{playbackSpeed}</Text>
-                <Text className="text-gray-500 font-barlow-condensed-bold text-2xs uppercase mt-0.5">KM/H</Text>
-              </View>
-
-              {/* Inclinometer Horizon circle */}
-              <View className="items-center justify-center w-24 h-24 rounded-full border border-white/20 bg-black/40 relative">
-                <View 
-                  style={{
-                    transform: [{ rotate: `${-playbackLean}deg` }],
-                    width: 70,
-                    height: 2,
-                    backgroundColor: '#00E5FF',
-                    borderRadius: 1,
-                  }}
-                />
-                <Text className="text-white font-rajdhani-bold text-base font-bold absolute mt-8">{Math.abs(playbackLean)}°</Text>
-                <Text className="text-[#00E5FF] font-barlow-condensed-bold text-2xs uppercase absolute mb-10">INCLINACIÓN</Text>
-              </View>
-
-              {/* Roll angle stats */}
-              <View className="items-center bg-black/40 border border-white/10 rounded-2xl p-4 min-w-[120px]">
-                <Text className="text-gray-400 font-barlow-condensed-bold text-xs uppercase tracking-wider">GIRO</Text>
-                <Text className="text-[#00A3E0] font-bold text-2xl font-rajdhani-bold">{playbackLean < 0 ? `L ${Math.abs(playbackLean)}°` : playbackLean > 0 ? `R ${playbackLean}°` : '0°'}</Text>
-                <Text className="text-gray-500 font-barlow-condensed-bold text-2xs uppercase mt-0.5">ÁNGULO</Text>
-              </View>
+            {/* Speed and Lean HUD (BikeSensor style overlay) */}
+            <View className="mb-6">
+              {renderBikeSensorDashboard(
+                playbackSpeed,
+                playbackLean,
+                playbackRoute?.maxLeftLean || 0,
+                playbackRoute?.maxRightLean || 0,
+                playbackRoute?.distance || 0,
+                playbackRoute?.maxSpeed || 0,
+                playbackAccel,
+                0,
+                0,
+                true,
+                true
+              )}
             </View>
 
             {/* Custom Video Playback Controls */}

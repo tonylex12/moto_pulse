@@ -279,7 +279,7 @@ export default function FuelLogsScreen() {
           contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
           style={{ flex: 1 }}
         >
-          {/* BMW Motorrad Telemetry TFT Block */}
+          {/* MotoPulse Telemetry TFT Block */}
           <View 
             style={{ 
               backgroundColor: tftStyles.bezelBg,
@@ -302,14 +302,12 @@ export default function FuelLogsScreen() {
               {/* Telemetry Header */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: tftStyles.headerBorder, paddingBottom: 6 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  {/* Small Motorsport Tricolor Badge */}
+                  {/* Small Telemetry Badge */}
                   <View style={{ flexDirection: 'row', marginRight: 8 }}>
-                    <View style={{ width: 4, height: 8, backgroundColor: '#002C5B' }} />
-                    <View style={{ width: 4, height: 8, backgroundColor: '#00A3E0' }} />
-                    <View style={{ width: 4, height: 8, backgroundColor: '#E00000' }} />
+                    <View style={{ width: 6, height: 8, backgroundColor: '#00E5FF', borderRadius: 1 }} />
                   </View>
-                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 11, color: tftStyles.headerText, letterSpacing: 1.5, textTransform: 'uppercase' }}>
-                    M-SPORT TELEMETRÍA
+                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 11, color: '#00E5FF', letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                    TELEMETRÍA DE CONSUMO
                   </Text>
                 </View>
                 <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 9, color: tftStyles.timeText, opacity: 0.8 }}>

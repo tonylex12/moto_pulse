@@ -734,7 +734,7 @@ export default function DashboardScreen() {
           {vehicle && !isRegisteringNew ? (
             // Active Dashboard View
             <View className="pb-10">
-              {/* BMW Motorrad Sport TFT Digital Instrument Cluster */}
+              {/* MotoPulse Sport TFT Digital Instrument Cluster */}
               <View
                 style={{
                   backgroundColor: tftStyles.bezelBg,
@@ -745,11 +745,7 @@ export default function DashboardScreen() {
                   marginBottom: 24,
                 }}
               >
-                <View style={{ flexDirection: 'row', height: 4, borderRadius: 2, overflow: 'hidden', marginBottom: 12 }}>
-                  <View style={{ flex: 1, backgroundColor: '#00A3E0' }} />
-                  <View style={{ flex: 1, backgroundColor: '#002C5B' }} />
-                  <View style={{ flex: 1, backgroundColor: '#E30613' }} />
-                </View>
+                <View style={{ height: 4, borderRadius: 2, backgroundColor: '#00E5FF', marginBottom: 12 }} />
 
                 <View
                   style={{
@@ -771,8 +767,8 @@ export default function DashboardScreen() {
                       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF1E27', opacity: 0.1 }} />
                     </View>
 
-                    <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 10, color: tftStyles.headerText, letterSpacing: 1 }}>
-                      BMW M-SPORT
+                    <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 10, color: '#00E5FF', letterSpacing: 1 }}>
+                      MOTO PULSE
                     </Text>
 
                     <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 10, color: tftStyles.timeText, opacity: 0.8 }}>
@@ -813,7 +809,7 @@ export default function DashboardScreen() {
                     </View>
 
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 9, color: tftStyles.odoTitle, letterSpacing: 1, marginBottom: 4, textTransform: 'uppercase' }}>
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 9, color: '#00E5FF', letterSpacing: 1, marginBottom: 4, textTransform: 'uppercase' }}>
                         ODÓMETRO TOTAL
                       </Text>
                       
@@ -821,23 +817,28 @@ export default function DashboardScreen() {
                         onPress={openEditOdoModal}
                         activeOpacity={0.7}
                         style={{ 
-                          backgroundColor: tftStyles.odoBg, 
-                          borderRadius: 8, 
-                          borderWidth: 1, 
-                          borderColor: tftStyles.odoBorder,
+                          backgroundColor: '#0F1216', 
+                          borderRadius: 12, 
+                          borderWidth: 1.5, 
+                          borderColor: 'rgba(0, 229, 255, 0.4)',
                           paddingVertical: 6, 
                           paddingHorizontal: 12,
                           position: 'relative',
                           justifyContent: 'center',
                           alignItems: 'center',
-                          minWidth: 140
+                          minWidth: 140,
+                          shadowColor: '#00E5FF',
+                          shadowOffset: { width: 0, height: 0 },
+                          shadowOpacity: 0.15,
+                          shadowRadius: 4,
+                          elevation: 2
                         }}
                       >
                         <Text
                           style={{
                             fontFamily: 'Orbitron-Bold',
                             fontSize: 22,
-                            color: tftStyles.odoBgDigits,
+                            color: 'rgba(0, 229, 255, 0.05)',
                             letterSpacing: 2,
                           }}
                         >
@@ -849,18 +850,18 @@ export default function DashboardScreen() {
                             position: 'absolute',
                             fontFamily: 'Orbitron-Bold',
                             fontSize: 22,
-                            color: tftStyles.odoText,
+                            color: '#00E5FF',
                             letterSpacing: 2,
-                            textShadowColor: tftStyles.odoShadow,
+                            textShadowColor: 'rgba(0, 229, 255, 0.8)',
                             textShadowOffset: { width: 0, height: 0 },
-                            textShadowRadius: 6,
+                            textShadowRadius: 8,
                           }}
                         >
                           {String(vehicle.currentMileage).padStart(6, '0')}
                         </Text>
                       </TouchableOpacity>
 
-                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 8, color: tftStyles.odoUnit, marginTop: 4, letterSpacing: 0.5 }}>
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 8, color: '#8F9CAE', marginTop: 4, letterSpacing: 0.5 }}>
                         TOCA PARA EDITAR
                       </Text>
                     </View>
