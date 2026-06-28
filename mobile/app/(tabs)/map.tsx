@@ -1326,7 +1326,7 @@ export default function RoutesMapScreen() {
   };
 
   return (
-    <SafeAreaView className={`flex-1 ${colors.bg}`}>
+    <SafeAreaView edges={['top', 'left', 'right']} className={`flex-1 ${colors.bg}`}>
       <View style={{ flex: 1, flexDirection: 'column', position: 'relative' }}>
         {/* Top Section: Map View */}
         <View 

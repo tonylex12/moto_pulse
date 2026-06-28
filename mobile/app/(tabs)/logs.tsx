@@ -225,7 +225,7 @@ export default function FuelLogsScreen() {
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${colors.bg}`}>
+    <SafeAreaView edges={['top', 'left', 'right']} className={`flex-1 ${colors.bg}`}>
       {/* Header */}
       <View
         style={{

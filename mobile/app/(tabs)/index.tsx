@@ -617,7 +617,7 @@ export default function DashboardScreen() {
   }
 
   return (
-    <SafeAreaView className={`flex-1 ${colors.bg}`}>
+    <SafeAreaView edges={['top', 'left', 'right']} className={`flex-1 ${colors.bg}`}>
       {/* Custom App Header with Garage Toggle */}
       <View
         className="flex-row justify-between items-center px-6 py-4"
