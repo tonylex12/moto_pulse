@@ -1555,7 +1555,7 @@ export default function RoutesMapScreen() {
               Platform.OS !== 'web' && hasAccelerometer === true,
               false, // isPlaybackMode
               false, // isMiniMode
-              0.8    // scale (reduced by 20%)
+              0.7    // scale (reduced by 30% total)
             )}
           </View>
         )}
@@ -1809,16 +1809,16 @@ export default function RoutesMapScreen() {
                               </Text>
                               {route.maxSpeed !== undefined && route.maxSpeed !== null && (
                                 <>
-                                  <Text className="text-xs font-barlow-condensed-bold mx-2 uppercase" style={{ color: colors.textMuted }}>•</Text>
-                                  <Text className="font-rajdhani-semibold text-xs font-semibold" style={{ color: colors.textSec }}>
+                                  <Text className={`text-xs font-barlow-condensed-bold mx-2 uppercase ${colors.textMuted}`}>•</Text>
+                                  <Text className={`font-rajdhani-semibold text-xs font-semibold ${colors.textSec}`}>
                                     MÁX VEL: {Math.round(route.maxSpeed)} km/h
                                   </Text>
                                 </>
                               )}
                               {route.maxLeftLean !== undefined && route.maxLeftLean !== null && (
                                 <>
-                                  <Text className="text-xs font-barlow-condensed-bold mx-2 uppercase" style={{ color: colors.textMuted }}>•</Text>
-                                  <Text className="font-rajdhani-semibold text-xs font-semibold" style={{ color: colors.textSec }}>
+                                  <Text className={`text-xs font-barlow-condensed-bold mx-2 uppercase ${colors.textMuted}`}>•</Text>
+                                  <Text className={`font-rajdhani-semibold text-xs font-semibold ${colors.textSec}`}>
                                     MÁX INC: L{Math.round(route.maxLeftLean)}° | R{Math.round(route.maxRightLean || 0)}°
                                   </Text>
                                 </>
@@ -2091,7 +2091,7 @@ const LEAFLET_HTML = `
       subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
     });
 
-    var currentLayer = dark;
+    var currentLayer = googleRoads;
     currentLayer.addTo(map);
 
     var userMarker = null;
@@ -2126,7 +2126,7 @@ const LEAFLET_HTML = `
       if (type === 'hybrid') {
         currentLayer = googleHybrid;
       } else {
-        currentLayer = isDark ? dark : googleRoads;
+        currentLayer = googleRoads;
       }
       currentLayer.addTo(map);
     };

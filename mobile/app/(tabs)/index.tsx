@@ -1598,9 +1598,10 @@ export default function DashboardScreen() {
         transparent={true}
         animationType="slide"
         onRequestClose={() => setMaintenanceModalVisible(false)}
+        statusBarTranslucent={true}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
           className="flex-1"
         >
           <View className="flex-1 bg-black/60 justify-end">
@@ -1769,9 +1770,10 @@ export default function DashboardScreen() {
         transparent={true}
         animationType="slide"
         onRequestClose={() => setEditSpecsModalVisible(false)}
+        statusBarTranslucent={true}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
           className="flex-1"
         >
           <View className="flex-1 bg-black/60 justify-end">
@@ -1990,9 +1992,14 @@ export default function DashboardScreen() {
       </Modal>
 
       {/* Edit Odometer Modal */}
-      <Modal visible={editOdoModalVisible} animationType="slide" transparent={true}>
+      <Modal 
+        visible={editOdoModalVisible} 
+        animationType="slide" 
+        transparent={true}
+        statusBarTranslucent={true}
+      >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
           className="flex-1"
         >
           <View className="flex-1 bg-black/60 justify-end">
