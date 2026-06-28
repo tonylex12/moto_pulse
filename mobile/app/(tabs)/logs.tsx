@@ -304,9 +304,9 @@ export default function FuelLogsScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   {/* Small Telemetry Badge */}
                   <View style={{ flexDirection: 'row', marginRight: 8 }}>
-                    <View style={{ width: 6, height: 8, backgroundColor: '#00E5FF', borderRadius: 1 }} />
+                    <View style={{ width: 6, height: 8, backgroundColor: tftStyles.accentBlue, borderRadius: 1 }} />
                   </View>
-                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 11, color: '#00E5FF', letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 11, color: tftStyles.accentBlue, letterSpacing: 1.5, textTransform: 'uppercase' }}>
                     TELEMETRÍA DE CONSUMO
                   </Text>
                 </View>

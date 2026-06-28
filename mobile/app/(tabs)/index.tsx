@@ -745,7 +745,7 @@ export default function DashboardScreen() {
                   marginBottom: 24,
                 }}
               >
-                <View style={{ height: 4, borderRadius: 2, backgroundColor: '#00E5FF', marginBottom: 12 }} />
+                <View style={{ height: 4, borderRadius: 2, backgroundColor: tftStyles.headerText, marginBottom: 12 }} />
 
                 <View
                   style={{
@@ -767,13 +767,34 @@ export default function DashboardScreen() {
                       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF1E27', opacity: 0.1 }} />
                     </View>
 
-                    <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 10, color: '#00E5FF', letterSpacing: 1 }}>
+                    <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 10, color: tftStyles.headerText, letterSpacing: 1 }}>
                       MOTO PULSE
                     </Text>
 
-                    <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 10, color: tftStyles.timeText, opacity: 0.8 }}>
-                      12:45
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Text style={{ 
+                        fontFamily: 'Orbitron-Bold', 
+                        fontSize: 12, 
+                        color: '#10B981', 
+                        fontWeight: 'bold',
+                        textShadowColor: '#10B981',
+                        textShadowOffset: { width: 0, height: 0 },
+                        textShadowRadius: 6,
+                      }}>
+                        ←
+                      </Text>
+                      <Text style={{ 
+                        fontFamily: 'Orbitron-Bold', 
+                        fontSize: 12, 
+                        color: '#10B981', 
+                        fontWeight: 'bold',
+                        textShadowColor: '#10B981',
+                        textShadowOffset: { width: 0, height: 0 },
+                        textShadowRadius: 6,
+                      }}>
+                        →
+                      </Text>
+                    </View>
                   </View>
 
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -809,7 +830,7 @@ export default function DashboardScreen() {
                     </View>
 
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 9, color: '#00E5FF', letterSpacing: 1, marginBottom: 4, textTransform: 'uppercase' }}>
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 9, color: tftStyles.odoText, letterSpacing: 1, marginBottom: 4, textTransform: 'uppercase' }}>
                         ODÓMETRO TOTAL
                       </Text>
                       
@@ -817,17 +838,17 @@ export default function DashboardScreen() {
                         onPress={openEditOdoModal}
                         activeOpacity={0.7}
                         style={{ 
-                          backgroundColor: '#0F1216', 
+                          backgroundColor: tftStyles.odoBg, 
                           borderRadius: 12, 
                           borderWidth: 1.5, 
-                          borderColor: 'rgba(0, 229, 255, 0.4)',
+                          borderColor: theme === 'light' ? 'rgba(28, 105, 212, 0.4)' : 'rgba(0, 229, 255, 0.4)',
                           paddingVertical: 6, 
                           paddingHorizontal: 12,
                           position: 'relative',
                           justifyContent: 'center',
                           alignItems: 'center',
                           minWidth: 140,
-                          shadowColor: '#00E5FF',
+                          shadowColor: tftStyles.odoText,
                           shadowOffset: { width: 0, height: 0 },
                           shadowOpacity: 0.15,
                           shadowRadius: 4,
@@ -838,7 +859,7 @@ export default function DashboardScreen() {
                           style={{
                             fontFamily: 'Orbitron-Bold',
                             fontSize: 22,
-                            color: 'rgba(0, 229, 255, 0.05)',
+                            color: theme === 'light' ? 'rgba(28, 105, 212, 0.05)' : 'rgba(0, 229, 255, 0.05)',
                             letterSpacing: 2,
                           }}
                         >
@@ -850,9 +871,9 @@ export default function DashboardScreen() {
                             position: 'absolute',
                             fontFamily: 'Orbitron-Bold',
                             fontSize: 22,
-                            color: '#00E5FF',
+                            color: tftStyles.odoText,
                             letterSpacing: 2,
-                            textShadowColor: 'rgba(0, 229, 255, 0.8)',
+                            textShadowColor: theme === 'light' ? 'rgba(28, 105, 212, 0.8)' : 'rgba(0, 229, 255, 0.8)',
                             textShadowOffset: { width: 0, height: 0 },
                             textShadowRadius: 8,
                           }}

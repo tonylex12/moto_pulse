@@ -908,7 +908,7 @@ export default function RoutesMapScreen() {
           elevation: 6,
         } : {
           width: 320 * scale,
-          height: 335 * scale,
+          height: 350 * scale,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 8 },
           shadowOpacity: 0.5,
@@ -1269,13 +1269,13 @@ export default function RoutesMapScreen() {
 
         {!isMiniMode && (
           <View 
-            className="flex-row items-center justify-between w-full border-t border-[#202630]/60 px-2"
+            className="flex-col items-center justify-center w-full border-t border-[#202630]/60 px-2"
             style={{
               marginTop: Math.max(2, 6 * scale),
               paddingTop: Math.max(6, 12 * scale),
             }}
           >
-            <View className="flex-row items-center">
+            <View className="flex-row items-center justify-center" style={{ marginBottom: Math.max(4, 8 * scale) }}>
               <View 
                 className={`w-1.5 h-1.5 rounded-full mr-1.5 ${isConnected ? 'bg-[#00E5FF]' : 'bg-[#EF4444]'}`}
                 style={{
@@ -1286,8 +1286,8 @@ export default function RoutesMapScreen() {
                 }}
               />
               <Text 
-                className="text-[#8F9CAE] font-bold uppercase tracking-wider"
-                style={{ fontSize: Math.max(7, 8.5 * scale) }}
+                className="text-[#8F9CAE] font-bold uppercase tracking-wider text-center"
+                style={{ fontSize: Math.max(7.5, 9 * scale) }}
               >
                 {isPlaybackMode 
                   ? 'REPRODUCCIÓN' 
@@ -1302,13 +1302,18 @@ export default function RoutesMapScreen() {
             {!isPlaybackMode && !isRecording && (
               <TouchableOpacity 
                 onPress={handleCalibrateLean}
-                className="bg-[#202630] border border-[#2D3748] rounded-full flex-row items-center"
+                className="bg-[#202630] border border-[#2D3748] rounded-full flex-row items-center justify-center"
                 style={{
-                  paddingHorizontal: Math.max(6, 10 * scale),
-                  paddingVertical: Math.max(3, 5 * scale)
+                  paddingHorizontal: Math.max(8, 12 * scale),
+                  paddingVertical: Math.max(3.5, 6 * scale),
+                  marginBottom: Math.max(4, 8 * scale)
                 }}
               >
-                <Settings size={Math.max(8, 10 * scale)} color="#00E5FF" className="mr-1" />
+                <Settings 
+                  size={Math.max(8, 10 * scale)} 
+                  color="#00E5FF" 
+                  style={{ marginRight: Math.max(4, 6 * scale) }}
+                />
                 <Text style={{ fontSize: Math.max(8, 10 * scale), color: '#00E5FF', fontWeight: 'bold' }}>
                   CALIBRAR CERO
                 </Text>
@@ -1555,7 +1560,7 @@ export default function RoutesMapScreen() {
               Platform.OS !== 'web' && hasAccelerometer === true,
               false, // isPlaybackMode
               false, // isMiniMode
-              0.7    // scale (reduced by 30% total)
+              0.6    // scale (reduced by 40% total)
             )}
           </View>
         )}
