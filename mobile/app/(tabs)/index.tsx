@@ -147,6 +147,114 @@ export default function DashboardScreen() {
   const [newOdometerValue, setNewOdometerValue] = useState("");
   const [savingOdometer, setSavingOdometer] = useState(false);
 
+  // States for dynamic tachometer, speedometer and gear simulation
+  const [simRpm, setSimRpm] = useState(1200);
+  const [simSpeed, setSimSpeed] = useState(0);
+  const [simGear, setSimGear] = useState("N");
+
+  useEffect(() => {
+    const gears = (() => {
+      if (!vehicle?.transmission) return 6;
+      const match = vehicle.transmission.match(/\d+/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (num >= 4 && num <= 6) return num;
+      }
+      return 6;
+    })();
+
+    const stages = [
+      { gear: 'N', startSpeed: 0, endSpeed: 0, startRpm: 1200, endRpm: 1200, duration: 4000 },
+      // Accel
+      { gear: '1', startSpeed: 0, endSpeed: 30, startRpm: 1500, endRpm: 7000, duration: 2500 },
+      { gear: '2', startSpeed: 30, endSpeed: 60, startRpm: 4600, endRpm: 7500, duration: 2500 },
+      { gear: '3', startSpeed: 60, endSpeed: 90, startRpm: 5000, endRpm: 8000, duration: 2500 },
+      { gear: '4', startSpeed: 90, endSpeed: 115, startRpm: 5400, endRpm: 8200, duration: 2500 },
+    ];
+
+    if (gears >= 5) {
+      stages.push({ gear: '5', startSpeed: 115, endSpeed: 135, startRpm: 5700, endRpm: 8400, duration: 2500 });
+    }
+    if (gears >= 6) {
+      stages.push({ gear: '6', startSpeed: 135, endSpeed: 160, startRpm: 6000, endRpm: 8600, duration: 2500 });
+    }
+
+    // Top gear cruise
+    const topGear = String(gears);
+    const topSpeed = gears === 4 ? 115 : gears === 5 ? 135 : 160;
+    const topRpm = gears === 4 ? 8200 : gears === 5 ? 8400 : 8600;
+    stages.push({ gear: topGear, startSpeed: topSpeed, endSpeed: topSpeed, startRpm: topRpm - 500, endRpm: topRpm - 1000, duration: 2000 });
+
+    // Decel
+    if (gears >= 6) {
+      stages.push({ gear: '6', startSpeed: 160, endSpeed: 135, startRpm: 7000, endRpm: 4500, duration: 1200 });
+    }
+    if (gears >= 5) {
+      stages.push({ gear: '5', startSpeed: 135, endSpeed: 115, startRpm: 6800, endRpm: 4300, duration: 1200 });
+    }
+    stages.push(
+      { gear: '4', startSpeed: 115, endSpeed: 90, startRpm: 6500, endRpm: 4000, duration: 1200 },
+      { gear: '3', startSpeed: 90, endSpeed: 60, startRpm: 6000, endRpm: 3800, duration: 1200 },
+      { gear: '2', startSpeed: 60, endSpeed: 30, startRpm: 5500, endRpm: 3500, duration: 1200 },
+      { gear: '1', startSpeed: 30, endSpeed: 0, startRpm: 4500, endRpm: 1200, duration: 1500 },
+      { gear: 'N', startSpeed: 0, endSpeed: 0, startRpm: 1200, endRpm: 1200, duration: 3000 }
+    );
+
+    let currentStageIndex = 0;
+    let stageStartTime = Date.now();
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      let elapsed = now - stageStartTime;
+      let currentStage = stages[currentStageIndex];
+
+      if (elapsed >= currentStage.duration) {
+        currentStageIndex = (currentStageIndex + 1) % stages.length;
+        stageStartTime = now;
+        elapsed = 0;
+        currentStage = stages[currentStageIndex];
+      }
+
+      const t = elapsed / currentStage.duration;
+      const targetSpeed = Math.round(currentStage.startSpeed + (currentStage.endSpeed - currentStage.startSpeed) * t);
+      const targetRpm = Math.round(currentStage.startRpm + (currentStage.endRpm - currentStage.startRpm) * t);
+      const targetGear = currentStage.gear;
+
+      const speedJitter = targetSpeed > 0 ? (Math.random() > 0.8 ? (Math.random() > 0.5 ? 1 : -1) : 0) : 0;
+      const rpmJitter = Math.floor((Math.random() - 0.5) * 40);
+
+      setSimSpeed(Math.max(0, targetSpeed + speedJitter));
+      setSimRpm(Math.max(1000, targetRpm + rpmJitter));
+      setSimGear(targetGear);
+    }, 50);
+
+    return () => clearInterval(interval);
+  }, [vehicle]);
+
+  // Turn signal state and blinking simulation
+  const [turnSignalMode, setTurnSignalMode] = useState<'off' | 'left' | 'right' | 'both'>('off');
+  const [turnSignalBlink, setTurnSignalBlink] = useState(false);
+
+  useEffect(() => {
+    const modes: ('off' | 'left' | 'right' | 'both')[] = ['off', 'left', 'off', 'right', 'off', 'both'];
+    let modeIndex = 0;
+    const interval = setInterval(() => {
+      modeIndex = (modeIndex + 1) % modes.length;
+      setTurnSignalMode(modes[modeIndex]);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTurnSignalBlink(prev => !prev);
+    }, 450);
+    return () => clearInterval(interval);
+  }, []);
+
+  const leftTurnActive = (turnSignalMode === 'left' || turnSignalMode === 'both') && turnSignalBlink;
+  const rightTurnActive = (turnSignalMode === 'right' || turnSignalMode === 'both') && turnSignalBlink;
+
   const openEditOdoModal = () => {
     if (!vehicle) return;
     setNewOdometerValue(vehicle.currentMileage.toString());
@@ -775,25 +883,84 @@ export default function DashboardScreen() {
                       <Text style={{ 
                         fontFamily: 'Orbitron-Bold', 
                         fontSize: 12, 
-                        color: '#10B981', 
+                        color: leftTurnActive ? '#10B981' : (theme === 'light' ? '#CBD5E0' : '#1A202C'), 
                         fontWeight: 'bold',
-                        textShadowColor: '#10B981',
+                        textShadowColor: leftTurnActive ? '#10B981' : 'transparent',
                         textShadowOffset: { width: 0, height: 0 },
-                        textShadowRadius: 6,
+                        textShadowRadius: leftTurnActive ? 6 : 0,
+                        opacity: leftTurnActive ? 1 : 0.2,
                       }}>
                         ←
                       </Text>
                       <Text style={{ 
                         fontFamily: 'Orbitron-Bold', 
                         fontSize: 12, 
-                        color: '#10B981', 
+                        color: rightTurnActive ? '#10B981' : (theme === 'light' ? '#CBD5E0' : '#1A202C'), 
                         fontWeight: 'bold',
-                        textShadowColor: '#10B981',
+                        textShadowColor: rightTurnActive ? '#10B981' : 'transparent',
                         textShadowOffset: { width: 0, height: 0 },
-                        textShadowRadius: 6,
+                        textShadowRadius: rightTurnActive ? 6 : 0,
+                        opacity: rightTurnActive ? 1 : 0.2,
                       }}>
                         →
                       </Text>
+                    </View>
+                  </View>
+
+                  {/* Dynamic RPM Tachometer Bar */}
+                  <View style={{ marginBottom: 16 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 8, color: tftStyles.odoTitle, letterSpacing: 0.5 }}>
+                        RPM x 1000
+                      </Text>
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 9, color: tftStyles.odoText, fontWeight: 'bold' }}>
+                        {simRpm.toLocaleString()} <Text style={{ fontSize: 7, color: tftStyles.gearLabel }}>RPM</Text>
+                      </Text>
+                    </View>
+                    
+                    {/* Tachometer Bar Graph */}
+                    <View style={{ flexDirection: 'row', gap: 2, height: 10, alignItems: 'center', width: '100%' }}>
+                      {Array.from({ length: 24 }).map((_, index) => {
+                        const rpmThreshold = (index + 1) * 500; // 500 RPM per block, up to 12,000 RPM
+                        const isActive = simRpm >= rpmThreshold;
+                        
+                        // Color scheme based on RPM range
+                        let activeColor = tftStyles.odoText; // Cyan or Royal Blue depending on theme
+                        if (rpmThreshold > 9500) {
+                          activeColor = '#FF1E27'; // Redline
+                        } else if (rpmThreshold > 8000) {
+                          activeColor = '#F59E0B'; // Warn/Yellow
+                        }
+                        
+                        return (
+                          <View 
+                            key={index}
+                            style={{
+                              flex: 1,
+                              height: rpmThreshold % 2000 === 0 ? 10 : 6, // every 2000 RPM is taller for a premium gauge tick mark look
+                              backgroundColor: isActive ? activeColor : (theme === 'light' ? '#CBD5E0' : '#1A202C'),
+                              borderRadius: 1,
+                              opacity: isActive ? 1.0 : 0.25,
+                              // Neon glow for active segment
+                              shadowColor: isActive ? activeColor : 'transparent',
+                              shadowOffset: { width: 0, height: 0 },
+                              shadowOpacity: isActive ? 0.8 : 0,
+                              shadowRadius: isActive ? 4 : 0,
+                            }}
+                          />
+                        );
+                      })}
+                    </View>
+
+                    {/* RPM Axis labels */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2, paddingHorizontal: 1 }}>
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 6.5, color: tftStyles.gearLabel }}>0</Text>
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 6.5, color: tftStyles.gearLabel }}>2</Text>
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 6.5, color: tftStyles.gearLabel }}>4</Text>
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 6.5, color: tftStyles.gearLabel }}>6</Text>
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 6.5, color: tftStyles.gearLabel }}>8</Text>
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 6.5, color: '#F59E0B', fontWeight: 'bold' }}>10</Text>
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 6.5, color: '#FF1E27', fontWeight: 'bold' }}>12</Text>
                     </View>
                   </View>
 
@@ -801,7 +968,7 @@ export default function DashboardScreen() {
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
                         <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 44, color: tftStyles.speedText, lineHeight: 48 }}>
-                          0
+                          {simSpeed}
                         </Text>
                         <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 10, color: tftStyles.speedUnit, marginLeft: 4, textTransform: 'uppercase' }}>
                           km/h
@@ -813,18 +980,18 @@ export default function DashboardScreen() {
                           width: 24, 
                           height: 24, 
                           borderRadius: 6, 
-                          backgroundColor: tftStyles.gearBg, 
+                          backgroundColor: simGear === 'N' ? 'rgba(52, 199, 89, 0.12)' : 'rgba(0, 229, 255, 0.12)', 
                           borderWidth: 1, 
-                          borderColor: tftStyles.statusLed,
+                          borderColor: simGear === 'N' ? '#34C759' : tftStyles.odoText,
                           alignItems: 'center',
                           justifyContent: 'center'
                         }}>
-                          <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 12, color: tftStyles.gearText }}>
-                            N
+                          <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 12, color: simGear === 'N' ? '#34C759' : tftStyles.odoText }}>
+                            {simGear}
                           </Text>
                         </View>
                         <Text style={{ fontFamily: 'Barlow-SemiBold', fontSize: 11, color: tftStyles.gearLabel, marginLeft: 6 }}>
-                          NEUTRAL
+                          {simGear === 'N' ? 'NEUTRAL' : 'GEAR'}
                         </Text>
                       </View>
                     </View>

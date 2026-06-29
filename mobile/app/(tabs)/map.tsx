@@ -395,7 +395,7 @@ export default function RoutesMapScreen() {
     
     try {
       await AsyncStorage.setItem('@motopulse_lean_calibration_offset', currentRaw.toString());
-      Alert.alert(
+      showAlert(
         'Calibración y Telemetría Reseteada', 
         'El inclinómetro se calibró a 0° y todos los picos de velocidad, inclinación y aceleración se reiniciaron.'
       );
@@ -428,9 +428,11 @@ export default function RoutesMapScreen() {
     let calibrationOffset = 0;
 
     const subscription = Accelerometer.addListener((data) => {
-      // Calculate roll angle: atan2(x, -y)
-      // data.x, data.y are in Gs
-      const angleRad = Math.atan2(data.x, -data.y);
+      // Calculate pitch-independent roll angle relative to gravity vector
+      // data.x, data.y, data.z are in Gs. The denominator projects gravity onto the 
+      // device's longitudinal plane (Y-Z), filtering out the forward/backward tilt (pitch) of the phone mount.
+      const gravityYZ = Math.max(0.1, Math.sqrt(data.y * data.y + data.z * data.z));
+      const angleRad = Math.atan2(-data.x, gravityYZ);
       const rawLean = angleRad * (180 / Math.PI);
 
       if (isNaN(rawLean)) return;
@@ -895,8 +897,8 @@ export default function RoutesMapScreen() {
     return (
       <View 
         className={isMiniMode 
-          ? "bg-[#0F1216]/95 border border-[#202630]/60 rounded-2xl p-2 items-center justify-center relative"
-          : "bg-[#0F1216]/95 border border-[#202630] rounded-3xl p-3 items-center justify-center relative self-center"
+          ? "bg-[#0F1216]/90 border border-[#202630]/60 rounded-2xl p-2 items-center justify-center relative"
+          : "bg-[#0F1216]/90 border border-[#202630] rounded-3xl p-3 items-center justify-center relative self-center"
         }
         style={isMiniMode ? {
           width: 160,
@@ -1538,7 +1540,7 @@ export default function RoutesMapScreen() {
         </TouchableOpacity>
 
         {/* Telemetry TFT HUD Overlay */}
-        {!cameraModeActive && (
+        {!cameraModeActive && !selectedRoute && (
           <View 
             style={{
               position: 'absolute',
@@ -1560,7 +1562,7 @@ export default function RoutesMapScreen() {
               Platform.OS !== 'web' && hasAccelerometer === true,
               false, // isPlaybackMode
               false, // isMiniMode
-              0.6    // scale (reduced by 40% total)
+              0.65   // scale (reduced by 35% total)
             )}
           </View>
         )}
