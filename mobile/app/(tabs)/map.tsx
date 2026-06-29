@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Modal, Scro
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT, UrlTile } from 'react-native-maps';
 import { WebView } from 'react-native-webview';
-import { Play, Square, Navigation, Bookmark, X, Eye, Trash2, Video, Settings } from 'lucide-react-native';
+import { Play, Square, Navigation, Bookmark, X, Eye, Trash2, Video, Settings, Flag, ArrowLeft, ArrowRight, CornerUpLeft, CornerUpRight, ArrowUp, Search } from 'lucide-react-native';
 import { Accelerometer } from 'expo-sensors';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -275,6 +275,195 @@ export default function RoutesMapScreen() {
   // Selected route to view on map
   const [selectedRoute, setSelectedRoute] = useState<SavedRoute | null>(null);
 
+  // Real-Time Navigation States (OSRM / Nominatim)
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [destination, setDestination] = useState<{ latitude: number; longitude: number; name: string } | null>(null);
+  const [navigationCoords, setNavigationCoords] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [navigationSteps, setNavigationSteps] = useState<any[]>([]);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [remainingDistance, setRemainingDistance] = useState(0);
+  const [remainingDuration, setRemainingDuration] = useState(0);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const getSpanishInstruction = (step: any) => {
+    if (!step?.maneuver) return 'Continúa recto';
+    const type = step.maneuver.type;
+    const modifier = step.maneuver.modifier;
+    const street = step.name ? ` en ${step.name}` : '';
+    
+    if (type === 'depart') return 'Inicia tu recorrido hacia el destino';
+    if (type === 'arrive') return 'Llegada a tu destino';
+    
+    let action = 'Continúa';
+    if (type === 'turn') {
+      if (modifier === 'left') action = 'Gira a la izquierda';
+      else if (modifier === 'right') action = 'Gira a la derecha';
+      else if (modifier === 'slight left') action = 'Gira levemente a la izquierda';
+      else if (modifier === 'slight right') action = 'Gira levemente a la derecha';
+      else if (modifier === 'sharp left') action = 'Gira pronunciadamente a la izquierda';
+      else if (modifier === 'sharp right') action = 'Gira pronunciadamente a la derecha';
+      else if (modifier === 'uturn') action = 'Da la vuelta en U';
+    } else if (type === 'new name') {
+      action = 'Continúa';
+    } else if (type === 'roundabout') {
+      action = 'En la rotonda toma la salida';
+    } else if (type === 'on ramp') {
+      action = 'Toma la rampa de acceso';
+    } else if (type === 'off ramp') {
+      action = 'Toma la rampa de salida';
+    } else if (type === 'fork') {
+      action = 'Mantente en la bifurcación';
+    }
+    
+    return `${action}${street}`;
+  };
+
+  const getDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3; // Earth radius in meters
+    const phi1 = lat1 * Math.PI / 180;
+    const phi2 = lat2 * Math.PI / 180;
+    const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+    const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+              Math.cos(phi1) * Math.cos(phi2) *
+              Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+  };
+
+  const searchPlaces = async (query: string) => {
+    if (!query || query.trim().length < 3) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'MotoPulseApp/1.0 (contact@motopulseapp.com)',
+          },
+        }
+      );
+      const data = await response.json();
+      setSearchResults(data || []);
+    } catch (error) {
+      console.warn('Error searching places:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const startNavigation = async (place: any) => {
+    if (!currentLocation) {
+      showAlert('Ubicación requerida', 'Se necesita tu ubicación actual GPS para calcular la ruta.');
+      return;
+    }
+    const destLat = parseFloat(place.lat);
+    const destLng = parseFloat(place.lon);
+    const destName = place.display_name.split(',')[0] || 'Destino';
+
+    setDestination({ latitude: destLat, longitude: destLng, name: destName });
+    setSearchResults([]);
+    setSearchQuery('');
+    setIsSearching(true);
+
+    try {
+      const response = await fetch(
+        `https://router.project-osrm.org/route/v1/driving/${currentLocation.longitude},${currentLocation.latitude};${destLng},${destLat}?overview=full&geometries=geojson&steps=true`
+      );
+      const data = await response.json();
+      if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+        const route = data.routes[0];
+        
+        // Map geojson coordinates to {latitude, longitude}
+        const coords = route.geometry.coordinates.map((c: any) => ({
+          latitude: c[1],
+          longitude: c[0]
+        }));
+        
+        // Parse steps and format Spanish instructions
+        const steps = route.legs[0].steps.map((step: any) => {
+          const stepLat = step.maneuver.location[1];
+          const stepLng = step.maneuver.location[0];
+          return {
+            ...step,
+            instruction: getSpanishInstruction(step),
+            coordinate: { latitude: stepLat, longitude: stepLng }
+          };
+        });
+
+        setNavigationCoords(coords);
+        setNavigationSteps(steps);
+        setCurrentStepIndex(0);
+        setRemainingDistance(route.distance);
+        setRemainingDuration(route.duration);
+        setIsNavigating(true);
+
+        // Inject path into Leaflet WebView if Android
+        if (Platform.OS === 'android' && webViewRef.current) {
+          const js = `if (window.showNavigationRoute) window.showNavigationRoute(${JSON.stringify(JSON.stringify(coords))});`;
+          webViewRef.current.injectJavaScript(js);
+        } else if (Platform.OS === 'ios' && mapRef.current) {
+          // Center iOS map to show route
+          mapRef.current.fitToCoordinates(coords, {
+            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+            animated: true
+          });
+        }
+      } else {
+        showAlert('Error de Ruta', 'No se pudo calcular una ruta para este destino.');
+      }
+    } catch (error) {
+      console.warn('Error fetching route from OSRM:', error);
+      showAlert('Error de Red', 'Ocurrió un error al conectar con el servidor de mapas.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const cancelNavigation = () => {
+    setIsNavigating(false);
+    setDestination(null);
+    setNavigationCoords([]);
+    setNavigationSteps([]);
+    setCurrentStepIndex(0);
+    setRemainingDistance(0);
+    setRemainingDuration(0);
+    if (Platform.OS === 'android' && webViewRef.current) {
+      const js = `if (window.clearNavigationRoute) window.clearNavigationRoute();`;
+      webViewRef.current.injectJavaScript(js);
+    }
+  };
+
+  const renderManeuverIcon = (step: any) => {
+    if (!step?.maneuver) return <Navigation size={22} color="#FFFFFF" />;
+    const { type, modifier } = step.maneuver;
+    if (type === 'arrive') return <Flag size={22} color="#FFFFFF" />;
+    if (type === 'depart') return <Navigation size={22} color="#FFFFFF" />;
+    
+    if (modifier === 'left' || modifier === 'sharp left') {
+      return <ArrowLeft size={22} color="#FFFFFF" />;
+    }
+    if (modifier === 'right' || modifier === 'sharp right') {
+      return <ArrowRight size={22} color="#FFFFFF" />;
+    }
+    if (modifier === 'slight left') {
+      return <CornerUpLeft size={22} color="#FFFFFF" />;
+    }
+    if (modifier === 'slight right') {
+      return <CornerUpRight size={22} color="#FFFFFF" />;
+    }
+    
+    return <ArrowUp size={22} color="#FFFFFF" />;
+  };
+
   // WebView synchronization effects for Android
   useEffect(() => {
     if (Platform.OS === 'android' && webViewRef.current) {
@@ -284,7 +473,9 @@ export default function RoutesMapScreen() {
   }, [mapType, colors.isDark]);
 
   useEffect(() => {
-    if (Platform.OS === 'android' && currentLocation && webViewRef.current) {
+    if (!currentLocation) return;
+
+    if (Platform.OS === 'android' && webViewRef.current) {
       const shouldCenter = !hasCenteredRef.current;
       const js = `if (window.updateUserLocation) window.updateUserLocation(${currentLocation.latitude}, ${currentLocation.longitude}, ${shouldCenter});`;
       webViewRef.current.injectJavaScript(js);
@@ -292,7 +483,53 @@ export default function RoutesMapScreen() {
         hasCenteredRef.current = true;
       }
     }
-  }, [currentLocation]);
+
+    // Real-Time Navigation tracking logic
+    if (isNavigating && navigationSteps.length > 0) {
+      const currentStep = navigationSteps[currentStepIndex];
+      if (currentStep) {
+        const distToStep = getDistanceMeters(
+          currentLocation.latitude,
+          currentLocation.longitude,
+          currentStep.coordinate.latitude,
+          currentStep.coordinate.longitude
+        );
+
+        // Check if user has arrived at the turn step (within 30m radius)
+        if (distToStep < 30) {
+          if (currentStep.maneuver.type === 'arrive' || currentStepIndex === navigationSteps.length - 1) {
+            showAlert('¡Llegaste!', 'Has alcanzado tu destino con éxito.');
+            cancelNavigation();
+            return;
+          } else {
+            // Advance to next instruction step
+            setCurrentStepIndex(prev => prev + 1);
+          }
+        }
+
+        // Calculate aggregate remaining distance
+        let distRest = 0;
+        // 1. Distance from user to current step
+        distRest += getDistanceMeters(
+          currentLocation.latitude,
+          currentLocation.longitude,
+          currentStep.coordinate.latitude,
+          currentStep.coordinate.longitude
+        );
+        // 2. Add distances of all subsequent steps
+        for (let i = currentStepIndex + 1; i < navigationSteps.length; i++) {
+          distRest += navigationSteps[i].distance || 0;
+        }
+
+        setRemainingDistance(Math.round(distRest));
+
+        // Estimate remaining duration: distance / speed (fallback to 40 km/h = 11.1 m/s if stopped)
+        const userSpeedMs = currentLocation.speed && currentLocation.speed > 0.5 ? currentLocation.speed : 11.1;
+        const estDuration = Math.round(distRest / userSpeedMs);
+        setRemainingDuration(estDuration);
+      }
+    }
+  }, [currentLocation, isNavigating, navigationSteps, currentStepIndex]);
 
   useEffect(() => {
     if (Platform.OS === 'android' && webViewRef.current) {
@@ -1330,6 +1567,163 @@ export default function RoutesMapScreen() {
   return (
     <SafeAreaView edges={['top', 'left', 'right']} className={`flex-1 ${colors.bg}`}>
       <View style={{ flex: 1, flexDirection: 'column', position: 'relative' }}>
+        {/* Top Destination Search Bar (OSM Nominatim) */}
+        {!isNavigating && !isRecording && !selectedRoute && !cameraModeActive && (
+          <View 
+            className="absolute top-4 left-4 z-30" 
+            style={{ right: 140 }}
+            pointerEvents="box-none"
+          >
+            <View 
+              className={`${colors.card} border ${colors.border} rounded-xl px-3 py-2 flex-row items-center`}
+              style={{
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: colors.isDark ? 0.3 : 0.08,
+                shadowRadius: 6,
+                elevation: 4
+              }}
+            >
+              <Search size={18} color={colors.isDark ? '#A0AEC0' : '#8E9FBC'} style={{ marginRight: 8 }} />
+              <TextInput
+                value={searchQuery}
+                onChangeText={(text) => {
+                  setSearchQuery(text);
+                  searchPlaces(text);
+                }}
+                placeholder="Buscar destino..."
+                placeholderTextColor={colors.isDark ? '#A0AEC0' : '#8E9FBC'}
+                className={`flex-1 text-sm ${colors.text} p-0`}
+                style={{ height: 24, fontSize: 13 }}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity 
+                  onPress={() => {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                  }}
+                  className="p-1"
+                >
+                  <X size={16} color={colors.isDark ? '#A0AEC0' : '#8E9FBC'} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Nominatim Search results list */}
+            {searchResults.length > 0 && (
+              <View 
+                className={`${colors.card} border ${colors.border} rounded-xl mt-1 overflow-hidden`}
+                style={{
+                  maxHeight: 220,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 6,
+                  elevation: 5
+                }}
+              >
+                <ScrollView keyboardShouldPersistTaps="handled">
+                  {searchResults.map((item, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => startNavigation(item)}
+                      className={`p-3 border-b ${colors.border} active:opacity-70`}
+                      style={{
+                        borderBottomWidth: index === searchResults.length - 1 ? 0 : 1
+                      }}
+                    >
+                      <Text className={`${colors.text} font-bold text-xs`} numberOfLines={1}>
+                        {item.display_name.split(',')[0]}
+                      </Text>
+                      <Text className={`${colors.textMuted} text-[10px] mt-0.5`} numberOfLines={1}>
+                        {item.display_name.split(',').slice(1).join(',').trim()}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Real-time Turn-by-Turn Instruction Banner */}
+        {isNavigating && navigationSteps.length > 0 && (
+          <View className="absolute top-4 left-4 right-4 z-30">
+            <View 
+              className="bg-emerald-600 rounded-2xl p-4 flex-row items-center"
+              style={{
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.35,
+                shadowRadius: 8,
+                elevation: 6
+              }}
+            >
+              <View className="w-10 h-10 rounded-full bg-emerald-700/60 items-center justify-center mr-3">
+                {renderManeuverIcon(navigationSteps[currentStepIndex])}
+              </View>
+              <View className="flex-1">
+                <Text className="text-[9px] text-emerald-100 uppercase tracking-[1.5px] font-bold">
+                  SIGUIENTE INSTRUCCIÓN
+                </Text>
+                <Text className="text-white font-rajdhani-bold font-bold text-sm leading-4 mt-0.5">
+                  {navigationSteps[currentStepIndex]?.instruction || 'Continúa en la ruta'}
+                </Text>
+                {navigationSteps[currentStepIndex]?.distance !== undefined && (
+                  <Text className="text-emerald-200 text-xs font-semibold mt-1">
+                    {navigationSteps[currentStepIndex].distance > 1000
+                      ? `En ${(navigationSteps[currentStepIndex].distance / 1000).toFixed(1)} km`
+                      : `En ${Math.round(navigationSteps[currentStepIndex].distance)} m`}
+                  </Text>
+                )}
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Real-time Navigation Summary Card & Cancel Button */}
+        {isNavigating && (
+          <>
+            {/* Bottom Left Summary Card */}
+            <View 
+              className={`${colors.card} border ${colors.border} rounded-xl p-3 absolute bottom-24 left-4 z-20 items-center justify-center`}
+              style={{
+                width: 130,
+                height: 55,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: colors.isDark ? 0.3 : 0.08,
+                shadowRadius: 6,
+                elevation: 5
+              }}
+            >
+              <Text className={`${colors.text} font-rajdhani-bold font-bold text-sm`}>
+                {remainingDuration > 60
+                  ? `${Math.round(remainingDuration / 60)} min`
+                  : `${remainingDuration} seg`}
+              </Text>
+              <Text className={`${colors.textMuted} text-[10px] font-semibold mt-0.5`}>
+                {(remainingDistance / 1000).toFixed(1)} km restantes
+              </Text>
+            </View>
+
+            {/* Bottom Right Cancel Button */}
+            <TouchableOpacity
+              onPress={cancelNavigation}
+              className="bg-red-600 rounded-full w-12 h-12 absolute bottom-24 right-4 z-20 items-center justify-center"
+              style={{
+                shadowColor: colors.bmwRed,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.4,
+                shadowRadius: 6,
+                elevation: 5
+              }}
+            >
+              <X size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          </>
+        )}
+
         {/* Top Section: Map View */}
         <View 
           style={{ 
@@ -1403,6 +1797,24 @@ export default function RoutesMapScreen() {
                     title="Fin"
                     pinColor={colors.bmwRed}
                   />
+                </>
+              )}
+
+              {/* Real-time active navigation route overlay */}
+              {isNavigating && navigationCoords.length > 1 && (
+                <>
+                  <Polyline
+                    coordinates={navigationCoords}
+                    strokeColor="#8B5CF6"
+                    strokeWidth={6}
+                  />
+                  {destination && (
+                    <Marker
+                      coordinate={destination}
+                      title={destination.name}
+                      pinColor="#8B5CF6"
+                    />
+                  )}
                 </>
               )}
             </MapView>
@@ -1515,8 +1927,8 @@ export default function RoutesMapScreen() {
           onPress={handleToggleCameraMode}
           className="absolute top-4 right-4 z-20 px-3.5 py-2.5 rounded-xl border flex-row items-center space-x-1.5"
           style={{
-            backgroundColor: cameraModeActive ? colors.bmwRed : colors.card,
-            borderColor: cameraModeActive ? colors.bmwRed : colors.border,
+            backgroundColor: colors.bmwRed,
+            borderColor: colors.bmwRed,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.15,
@@ -1524,16 +1936,17 @@ export default function RoutesMapScreen() {
             elevation: 4
           }}
         >
-          <View 
+            <View 
             className="w-2 h-2 rounded-full" 
             style={{ 
               opacity: isRecordingVideo ? (hudBlink ? 1 : 0.3) : 1,
-              backgroundColor: cameraModeActive ? '#FFFFFF' : '#EF4444'
+              backgroundColor: '#FFFFFF',
+              marginRight: 6
             }} 
           />
           <Text 
             style={{ fontFamily: 'Rajdhani-Bold', fontSize: 11 }}
-            className={cameraModeActive ? 'text-white font-bold' : `${colors.text} font-bold`}
+            className="text-white font-bold"
           >
             {cameraModeActive ? 'SOLO MAPA' : 'CÁMARA HUD'}
           </Text>
@@ -2114,6 +2527,16 @@ const LEAFLET_HTML = `
     var startMarker = null;
     var endMarker = null;
 
+    // Navigation polyline and destination marker variables
+    var navigationPolyline = L.polyline([], { color: '#8B5CF6', weight: 6, opacity: 0.95 }).addTo(map);
+    var destMarker = null;
+    var destIcon = L.divIcon({
+      className: 'dest-route-icon',
+      html: '<div style="width: 14px; height: 14px; background-color: #8B5CF6; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 10px #8B5CF6;"></div>',
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
+    });
+
     var startIcon = L.divIcon({
       className: 'start-route-icon',
       html: '<div style="width: 12px; height: 12px; background-color: #10B981; border: 2px solid white; border-radius: 50%;"></div>',
@@ -2177,6 +2600,25 @@ const LEAFLET_HTML = `
 
     window.centerOnUser = function(lat, lng) {
       map.setView([lat, lng], 16);
+    };
+
+    window.showNavigationRoute = function(coordsJson) {
+      if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
+      var coords = JSON.parse(coordsJson);
+      if (coords.length > 0) {
+        var latlngs = coords.map(function(c) { return [c.latitude, c.longitude]; });
+        navigationPolyline.setLatLngs(latlngs);
+        destMarker = L.marker(latlngs[latlngs.length - 1], { icon: destIcon }).addTo(map);
+        var bounds = L.latLngBounds(latlngs);
+        map.fitBounds(bounds, { padding: [50, 50] });
+      } else {
+        navigationPolyline.setLatLngs([]);
+      }
+    };
+
+    window.clearNavigationRoute = function() {
+      navigationPolyline.setLatLngs([]);
+      if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
     };
   </script>
 </body>
