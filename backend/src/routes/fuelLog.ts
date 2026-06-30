@@ -155,9 +155,12 @@ router.get('/stats/:vehicleId', requireClerkAuth, async (req: AuthRequest, res: 
       const maxOdometer = logs[logs.length - 1].odometer;
       totalDistance = maxOdometer - minOdometer;
 
-      // Fuel consumption: total distance divided by sum of all liters filled
-      if (totalDistance > 0 && totalLiters > 0) {
-        avgConsumption = totalDistance / totalLiters; // Kilometers per Liter
+      // Fuel consumption: total distance divided by sum of liters filled starting from the second log
+      // (since the first fill-up sets the baseline odometer)
+      const litersAfterFirst = logs.slice(1).reduce((sum, log) => sum + log.liters, 0);
+
+      if (totalDistance > 0 && litersAfterFirst > 0) {
+        avgConsumption = totalDistance / litersAfterFirst; // Kilometers per Liter
         costPerKm = totalCost / totalDistance; // Currency units per Kilometer
       }
     }
