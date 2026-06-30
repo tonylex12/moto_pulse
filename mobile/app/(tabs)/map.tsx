@@ -968,6 +968,25 @@ export default function RoutesMapScreen() {
         }
       }
 
+      // Extract peak values from recorded route coordinates to ensure accurate data,
+      // especially if the route was recorded while the app was in the background
+      let finalMaxLeft = maxLeftLean || 0;
+      let finalMaxRight = maxRightLean || 0;
+      let finalMaxSpeed = maxSpeed || 0;
+
+      recordedRoute.forEach((pt: any) => {
+        if (pt.leanAngle !== undefined && pt.leanAngle !== null) {
+          if (pt.leanAngle < 0) {
+            finalMaxLeft = Math.max(finalMaxLeft, Math.abs(pt.leanAngle));
+          } else if (pt.leanAngle > 0) {
+            finalMaxRight = Math.max(finalMaxRight, pt.leanAngle);
+          }
+        }
+        if (pt.speed !== undefined && pt.speed !== null) {
+          finalMaxSpeed = Math.max(finalMaxSpeed, pt.speed);
+        }
+      });
+
       const payload = {
         name: routeName.trim(),
         coordinates: recordedRoute,
@@ -975,9 +994,9 @@ export default function RoutesMapScreen() {
         endPoint: endPoint.trim() || undefined,
         distance: totalDistance,
         notes: routeNotes.trim() || undefined,
-        maxSpeed: maxSpeed || undefined,
-        maxLeftLean: maxLeftLean || undefined,
-        maxRightLean: maxRightLean || undefined,
+        maxSpeed: finalMaxSpeed || undefined,
+        maxLeftLean: finalMaxLeft || undefined,
+        maxRightLean: finalMaxRight || undefined,
       };
 
       // Changed to relative path without leading slash
@@ -2058,7 +2077,7 @@ export default function RoutesMapScreen() {
       {/* Save Route Modal */}
       <Modal visible={saveModalVisible} animationType="slide" transparent={true}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           className="flex-1"
         >
           <View className="flex-1 bg-black/60 justify-end">

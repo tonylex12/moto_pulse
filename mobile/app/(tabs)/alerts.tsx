@@ -560,7 +560,7 @@ export default function AlertsScreen() {
       {/* Add Alert Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>

@@ -1789,7 +1789,7 @@ export default function DashboardScreen() {
         statusBarTranslucent={true}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           className="flex-1"
         >
           <View className="flex-1 bg-black/60 justify-end">
@@ -1961,7 +1961,7 @@ export default function DashboardScreen() {
         statusBarTranslucent={true}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           className="flex-1"
         >
           <View className="flex-1 bg-black/60 justify-end">
@@ -2187,7 +2187,7 @@ export default function DashboardScreen() {
         statusBarTranslucent={true}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           className="flex-1"
         >
           <View className="flex-1 bg-black/60 justify-end">
