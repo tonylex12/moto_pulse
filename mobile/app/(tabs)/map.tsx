@@ -2254,11 +2254,12 @@ export default function RoutesMapScreen() {
                                   </Text>
                                 </>
                               )}
-                              {route.maxLeftLean !== undefined && route.maxLeftLean !== null && (
+                              {((route.maxLeftLean !== undefined && route.maxLeftLean !== null) || 
+                                (route.maxRightLean !== undefined && route.maxRightLean !== null)) && (
                                 <>
                                   <Text className={`text-xs font-barlow-condensed-bold mx-2 uppercase ${colors.textMuted}`}>•</Text>
                                   <Text className={`font-rajdhani-semibold text-xs font-semibold ${colors.textSec}`}>
-                                    MÁX INC: L{Math.round(route.maxLeftLean)}° | R{Math.round(route.maxRightLean || 0)}°
+                                    MÁX INC: L{Math.round(route.maxLeftLean || 0)}° | R{Math.round(route.maxRightLean || 0)}°
                                   </Text>
                                 </>
                               )}
