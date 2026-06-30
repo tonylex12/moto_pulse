@@ -2077,7 +2077,7 @@ export default function RoutesMapScreen() {
       {/* Save Route Modal */}
       <Modal visible={saveModalVisible} animationType="slide" transparent={true} statusBarTranslucent={true}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior="padding"
           className="flex-1"
         >
           <View className="flex-1 bg-black/60 justify-end">
