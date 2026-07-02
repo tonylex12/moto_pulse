@@ -43,10 +43,28 @@ async function scrapeImageForQuery(queryText: string): Promise<string | null> {
       }
     }
 
-    console.log(`🤖 Found ${targetUrls.length} web pages to scrape for images.`);
+    // Sort targetUrls so that high-quality domains come first
+    const highQualityDomains = [
+      'wikipedia.org',
+      'wikimedia.org',
+      'cycleworld.com',
+      'motorcycle.com',
+      'motorcyclenews.com',
+      'topspeed.com',
+      'autoevolution.com',
+      'ultimatemotorcycling.com'
+    ];
     
-    // Scrape the top 2 web pages sequentially to find a valid og:image
-    for (const targetUrl of targetUrls.slice(0, 2)) {
+    targetUrls.sort((a, b) => {
+      const aIsHigh = highQualityDomains.some(d => a.toLowerCase().includes(d)) ? 1 : 0;
+      const bIsHigh = highQualityDomains.some(d => b.toLowerCase().includes(d)) ? 1 : 0;
+      return bIsHigh - aIsHigh;
+    });
+
+    console.log(`🤖 Found ${targetUrls.length} web pages. Scoping to top 5 prioritized candidates.`);
+    
+    // Scrape the top 5 web pages sequentially to find a valid og:image
+    for (const targetUrl of targetUrls.slice(0, 5)) {
       try {
         console.log(`📸 Scraping OpenGraph image from page: ${targetUrl}...`);
         const pageResponse = await fetch(targetUrl, {
@@ -83,6 +101,19 @@ async function scrapeImageForQuery(queryText: string): Promise<string | null> {
           }
           
           if (imageUrl.startsWith('http')) {
+            // Filter out layout images/logos/avatars
+            const blacklistedKeywords = [
+              'logo', 'avatar', 'icon', 'profile', 'author', 'banner', 'header',
+              'default', 'placeholder', 'theme', 'css', 'sprite', 'button',
+              'ad', 'advertisement', 'pixel', 'spacer', 'loader', 'spinner'
+            ];
+            const lowerImgUrl = imageUrl.toLowerCase();
+            const isInvalid = blacklistedKeywords.some(keyword => lowerImgUrl.includes(keyword));
+            if (isInvalid) {
+              console.log(`⚠️ Ignored layout/logo image candidate: ${imageUrl}`);
+              continue;
+            }
+
             console.log(`✅ Extracted motorcycle image URL: ${imageUrl}`);
             return imageUrl;
           }

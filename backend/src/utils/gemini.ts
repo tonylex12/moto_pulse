@@ -530,30 +530,54 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
  * This is 100% keyless, reliable, and does not require an AI API key.
  */
 export async function fetchVehicleSpecs(brand: string, model: string, year: number): Promise<VehicleSpecs | null> {
-  const queryText = `${brand} ${model} ${year} ficha tecnica especificaciones`;
-  
-  console.log(`🔍 Scraping specs search results for: ${queryText}...`);
-
-  // 1. Try DuckDuckGo first
-  let snippets = await fetchSnippetsFromDDG(queryText);
-  
-  // 2. Fall back to Yahoo if DuckDuckGo is blocked or empty
-  if (snippets.length === 0) {
-    console.log(`⚠️ DDG returned 0 results. Falling back to Yahoo Search...`);
-    snippets = await fetchSnippetsFromYahoo(queryText);
+  // 1. Try Spanish query first
+  const queryEs = `${brand} ${model} ${year} ficha tecnica especificaciones`;
+  console.log(`🔍 Scraping specs (Spanish) for: ${queryEs}...`);
+  let snippetsEs = await fetchSnippetsFromDDG(queryEs);
+  if (snippetsEs.length === 0) {
+    console.log(`⚠️ DDG returned 0 results. Falling back to Yahoo Search (Spanish)...`);
+    snippetsEs = await fetchSnippetsFromYahoo(queryEs);
   }
 
-  console.log(`🤖 Found ${snippets.length} web text snippets to parse.`);
-  if (snippets.length === 0) {
+  console.log(`🤖 Found ${snippetsEs.length} Spanish web text snippets to parse.`);
+  let specs = extractSpecsWithScoring(snippetsEs);
+
+  // 2. If key specs are missing/incomplete, try English query to fill in the gaps
+  const keyFields: (keyof VehicleSpecs)[] = ['engineCc', 'power', 'torque', 'tankSize', 'weight'];
+  const isIncomplete = keyFields.some(field => specs[field] === null);
+
+  if (isIncomplete) {
+    const queryEn = `${brand} ${model} ${year} specs specifications technical data`;
+    console.log(`🔍 Specs incomplete (key fields missing). Scraping specs (English) for: ${queryEn}...`);
+    let snippetsEn = await fetchSnippetsFromDDG(queryEn);
+    if (snippetsEn.length === 0) {
+      console.log(`⚠️ DDG returned 0 results. Falling back to Yahoo Search (English)...`);
+      snippetsEn = await fetchSnippetsFromYahoo(queryEn);
+    }
+
+    console.log(`🤖 Found ${snippetsEn.length} English web text snippets to parse.`);
+    if (snippetsEn.length > 0) {
+      try {
+        const specsEn = extractSpecsWithScoring(snippetsEn);
+        // Merge: fill in missing fields from the English search results
+        (Object.keys(specs) as (keyof VehicleSpecs)[]).forEach(field => {
+          if (specs[field] === null && specsEn[field] !== null) {
+            console.log(`✅ Filled missing spec [${field}] from English search: ${specsEn[field]}`);
+            specs[field] = specsEn[field];
+          }
+        });
+      } catch (mergeErr) {
+        console.warn('⚠️ Failed to merge English specs:', mergeErr);
+      }
+    }
+  }
+
+  // Check if we got any specs at all
+  const hasAnySpecs = Object.values(specs).some(val => val !== null);
+  if (!hasAnySpecs) {
     return null;
   }
 
-  try {
-    const specs = extractSpecsWithScoring(snippets);
-    console.log('🤖 Web scraper successfully parsed specs:', JSON.stringify(specs, null, 2));
-    return specs;
-  } catch (error) {
-    console.error('Error during scraping specs:', error);
-    return null;
-  }
+  console.log('🤖 Web scraper successfully parsed specs:', JSON.stringify(specs, null, 2));
+  return specs;
 }
