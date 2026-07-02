@@ -530,22 +530,17 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
  * This is 100% keyless, reliable, and does not require an AI API key.
  */
 export async function fetchVehicleSpecs(brand: string, model: string, year: number): Promise<VehicleSpecs | null> {
-  // 1. Try searching specifically on lucero.com.pe first (without year to match catalog pages)
-  const luceroQuery = `site:lucero.com.pe ${brand} ${model}`;
-  console.log(`🔍 Prioritizing specs search on Lucero: ${luceroQuery}...`);
-  let snippets = await fetchSnippetsFromDDG(luceroQuery);
+  const queryText = `${brand} ${model} ${year} ficha tecnica especificaciones`;
+  
+  console.log(`🔍 Scraping specs search results for: ${queryText}...`);
 
-  // 2. If Lucero query fails or returns empty, try general DDG search
+  // 1. Try DuckDuckGo first
+  let snippets = await fetchSnippetsFromDDG(queryText);
+  
+  // 2. Fall back to Yahoo if DuckDuckGo is blocked or empty
   if (snippets.length === 0) {
-    const generalQuery = `${brand} ${model} ${year} ficha tecnica especificaciones`;
-    console.log(`🔍 Falling back to general specs search: ${generalQuery}...`);
-    snippets = await fetchSnippetsFromDDG(generalQuery);
-    
-    // 3. Fall back to Yahoo general if general DDG fails
-    if (snippets.length === 0) {
-      console.log(`⚠️ General DDG returned 0 results. Falling back to Yahoo...`);
-      snippets = await fetchSnippetsFromYahoo(generalQuery);
-    }
+    console.log(`⚠️ DDG returned 0 results. Falling back to Yahoo Search...`);
+    snippets = await fetchSnippetsFromYahoo(queryText);
   }
 
   console.log(`🤖 Found ${snippets.length} web text snippets to parse.`);

@@ -98,21 +98,8 @@ async function scrapeImageForQuery(queryText: string): Promise<string | null> {
   return null;
 }
 
-/**
- * Keyless, scraper-based search utility to fetch a representative motorcycle image URL.
- * It queries DuckDuckGo for the bike model, extracts the first search result link,
- * and scrapes its OpenGraph (og:image) featured image tag.
- * Prioritizes lucero.com.pe for high quality catalog photos.
- */
 export async function fetchVehicleImage(brand: string, model: string, year: number): Promise<string | null> {
-  // 1. Try searching specifically on lucero.com.pe first (without year to match catalog pages)
-  const luceroQuery = `site:lucero.com.pe ${brand} ${model}`;
-  console.log(`🔍 Prioritizing image search on Lucero: ${luceroQuery}...`);
-  const luceroImage = await scrapeImageForQuery(luceroQuery);
-  if (luceroImage) return luceroImage;
-
-  // 2. Fall back to general web search
-  const generalQuery = `${brand} ${model} ${year} motorcycle photo review`;
-  console.log(`🔍 Falling back to general image search: ${generalQuery}...`);
-  return await scrapeImageForQuery(generalQuery);
+  const queryText = `${brand} ${model} ${year} motorcycle photo review`;
+  console.log(`🔍 Scraping image search for: ${queryText}...`);
+  return await scrapeImageForQuery(queryText);
 }
