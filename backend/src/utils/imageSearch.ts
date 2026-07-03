@@ -99,21 +99,20 @@ async function scrapeImageForQuery(queryText: string): Promise<string | null> {
             const urlObj = new URL(targetUrl);
             imageUrl = urlObj.origin + imageUrl;
           }
+
+          // Clean up nested absolute URLs (e.g. '/images/https://example.com/img.jpg' resolved to 'https://domain.com/images/https://example.com/img.jpg')
+          const lastHttpIndex = imageUrl.lastIndexOf('http');
+          if (lastHttpIndex > 0) {
+            imageUrl = imageUrl.substring(lastHttpIndex);
+          }
           
           if (imageUrl.startsWith('http')) {
-            // Filter out layout images/logos/avatars
-            const blacklistedKeywords = [
-              'logo', 'avatar', 'icon', 'profile', 'author', 'banner', 'header',
-              'default', 'placeholder', 'theme', 'css', 'sprite', 'button',
-              'ad', 'advertisement', 'pixel', 'spacer', 'loader', 'spinner'
-            ];
-            const lowerImgUrl = imageUrl.toLowerCase();
-            const isInvalid = blacklistedKeywords.some(keyword => lowerImgUrl.includes(keyword));
-            if (isInvalid) {
+            // Filter out layout images/logos/avatars using word boundaries to avoid false positives (e.g. matching 'uploads' or 'download' via 'ad')
+            const blacklistRegex = /\b(logo|avatar|icon|profile|author|banner|header|default|placeholder|theme|css|sprite|button|ad|ads|advertisement|pixel|spacer|loader|spinner)\b/i;
+            if (blacklistRegex.test(imageUrl)) {
               console.log(`⚠️ Ignored layout/logo image candidate: ${imageUrl}`);
               continue;
             }
-
             console.log(`✅ Extracted motorcycle image URL: ${imageUrl}`);
             return imageUrl;
           }
@@ -130,6 +129,19 @@ async function scrapeImageForQuery(queryText: string): Promise<string | null> {
 }
 
 export async function fetchVehicleImage(brand: string, model: string, year: number): Promise<string | null> {
+  // 1. Try local catalog query to match national market catalogs (somosmoto.pe, motocorp.pe, efe.com.pe)
+  const localQuery = `${brand} ${model} site:somosmoto.pe OR site:motocorp.pe OR site:efe.com.pe`;
+  console.log(`🔍 Scraping image search for local catalog: ${localQuery}...`);
+  const localImg = await scrapeImageForQuery(localQuery);
+  if (localImg) return localImg;
+
+  // 2. Try general spanish query
+  const queryEs = `${brand} ${model} ${year} moto fotografia foto`;
+  console.log(`🔍 Scraping image search for general Spanish: ${queryEs}...`);
+  const esImg = await scrapeImageForQuery(queryEs);
+  if (esImg) return esImg;
+
+  // 3. Fallback to general english query
   const queryText = `${brand} ${model} ${year} motorcycle photo review`;
   console.log(`🔍 Scraping image search for: ${queryText}...`);
   return await scrapeImageForQuery(queryText);
