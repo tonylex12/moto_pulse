@@ -1,3 +1,37 @@
+async function fetchTargetUrlsFromYahoo(queryText: string): Promise<string[]> {
+  const query = encodeURIComponent(queryText);
+  const url = `https://search.yahoo.com/search?p=${query}`;
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    if (!response.ok) return [];
+
+    const html = await response.text();
+    const urls: string[] = [];
+    
+    // Yahoo search results contain redirect URLs with RU=
+    const ruRegex = /RU=([^&'\"\/]+)/g;
+    let match;
+    while ((match = ruRegex.exec(html)) !== null) {
+      try {
+        const decoded = decodeURIComponent(match[1]);
+        if (decoded.startsWith('http') && !decoded.includes('yahoo.com')) {
+          if (!urls.includes(decoded)) {
+            urls.push(decoded);
+          }
+        }
+      } catch (e) {}
+    }
+    return urls;
+  } catch (e: any) {
+    console.warn(`⚠️ Yahoo image search fallback failed: ${e.message}`);
+    return [];
+  }
+}
+
 /**
  * Keyless, scraper-based search utility to fetch a representative motorcycle image URL.
  * It queries DuckDuckGo for the bike model, extracts the first search result link,
@@ -41,6 +75,12 @@ async function scrapeImageForQuery(queryText: string): Promise<string | null> {
       if (targetUrl.startsWith('http') && !targetUrl.includes('duckduckgo.com')) {
         targetUrls.push(targetUrl);
       }
+    }
+
+    if (targetUrls.length === 0) {
+      console.log(`⚠️ DDG returned 0 links for image search. Falling back to Yahoo...`);
+      const yahooUrls = await fetchTargetUrlsFromYahoo(queryText);
+      targetUrls.push(...yahooUrls);
     }
 
     // Sort targetUrls so that high-quality domains come first
@@ -107,8 +147,8 @@ async function scrapeImageForQuery(queryText: string): Promise<string | null> {
           }
           
           if (imageUrl.startsWith('http')) {
-            // Filter out layout images/logos/avatars using word boundaries to avoid false positives (e.g. matching 'uploads' or 'download' via 'ad')
-            const blacklistRegex = /\b(logo|avatar|icon|profile|author|banner|header|default|placeholder|theme|css|sprite|button|ad|ads|advertisement|pixel|spacer|loader|spinner)\b/i;
+            // Filter out layout images/logos/avatars or marketing share cards (e.g. 'og', 'share', 'social' images that usually contain overlaid prices and branding)
+            const blacklistRegex = /\b(logo|avatar|icon|profile|author|banner|header|default|placeholder|theme|css|sprite|button|ad|ads|advertisement|pixel|spacer|loader|spinner|og|share|social|facebook|twitter)\b|[-_]og\b/i;
             if (blacklistRegex.test(imageUrl)) {
               console.log(`⚠️ Ignored layout/logo image candidate: ${imageUrl}`);
               continue;
