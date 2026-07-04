@@ -95,7 +95,8 @@ router.post('/', requireClerkAuth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: parsed.error.errors[0].message });
     }
 
-    const { brand, model, year, currentMileage } = parsed.data;
+    const { brand, model: rawModel, year, currentMileage } = parsed.data;
+    const model = rawModel.replace(/\s+/g, '');
 
     // Ensure User exists in local DB before creating vehicle
     const userExists = await prisma.user.findUnique({ where: { clerkId } });
@@ -189,9 +190,14 @@ router.put('/:id', requireClerkAuth, async (req: AuthRequest, res: Response) => 
       return res.status(403).json({ error: 'Forbidden: You do not own this vehicle' });
     }
 
+    const updateData = { ...parsed.data };
+    if (updateData.model) {
+      updateData.model = updateData.model.replace(/\s+/g, '');
+    }
+
     const updatedVehicle = await prisma.vehicle.update({
       where: { id },
-      data: parsed.data,
+      data: updateData,
     });
 
     return res.status(200).json(updatedVehicle);
