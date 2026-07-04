@@ -31,7 +31,6 @@ async function fetchTargetUrlsFromYahoo(queryText: string): Promise<string[]> {
     return [];
   }
 }
-
 function isUrlRelevantToModel(urlText: string, brand: string, model: string): boolean {
   const lowerUrl = urlText.toLowerCase();
   const lowerModel = model.toLowerCase();
@@ -48,6 +47,7 @@ function isUrlRelevantToModel(urlText: string, brand: string, model: string): bo
   // Detect conflicting model codes in the URL path to avoid fuzzy matching wrong models (e.g. XR190L when requesting NX190)
   const codeRegex = /\b[a-z]+\d+[a-z]*\b/g;
   const codes = lowerUrl.match(codeRegex) || [];
+  let foundConflict = false;
   for (const code of codes) {
     const cleanCode = code.replace(/[^a-z0-9]/g, '');
     if (cleanCode !== cleanModel) {
@@ -55,13 +55,16 @@ function isUrlRelevantToModel(urlText: string, brand: string, model: string): bo
       if (cleanCode.startsWith(cleanModel) || cleanModel.startsWith(cleanCode)) {
         continue;
       }
-      return false;
+      foundConflict = true;
     }
+  }
+
+  if (foundConflict) {
+    return false;
   }
 
   return true;
 }
-
 /**
  * Keyless, scraper-based search utility to fetch a representative motorcycle image URL.
  * It queries DuckDuckGo for the bike model, extracts the first search result link,

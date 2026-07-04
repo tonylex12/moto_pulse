@@ -539,6 +539,7 @@ function isSnippetRelevantToModel(snippet: string, brand: string, model: string)
   // Detect conflicting model codes in the snippet to avoid fuzzy matching wrong models (e.g. XR190L when requesting NX190)
   const codeRegex = /\b[a-z]+\d+[a-z]*\b/g;
   const codes = lowerSnippet.match(codeRegex) || [];
+  let foundConflict = false;
   for (const code of codes) {
     const cleanCode = code.replace(/[^a-z0-9]/g, '');
     if (cleanCode !== cleanModel) {
@@ -546,13 +547,16 @@ function isSnippetRelevantToModel(snippet: string, brand: string, model: string)
       if (cleanCode.startsWith(cleanModel) || cleanModel.startsWith(cleanCode)) {
         continue;
       }
-      return false;
+      foundConflict = true;
     }
+  }
+
+  if (foundConflict) {
+    return lowerSnippet.includes(cleanModel);
   }
 
   return true;
 }
-
 /**
  * Searches DuckDuckGo HTML interface (and falls back to Yahoo Search)
  * and extracts technical specifications using rule-based scoring.
