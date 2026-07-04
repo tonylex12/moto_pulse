@@ -153,7 +153,14 @@ export const TachometerGauge: React.FC<TachometerGaugeProps> = ({
               className={`flex-1 mx-0.5 rounded-sm ${
                 isFilled && index === filledSegments - 1 ? 'opacity-90' : ''
               }`}
-              style={{ backgroundColor: segmentBg }}
+              style={{ 
+                backgroundColor: segmentBg,
+                shadowColor: isFilled ? segmentBg : 'transparent',
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: isFilled ? 0.6 : 0,
+                shadowRadius: isFilled ? 3.5 : 0,
+                elevation: isFilled ? 1 : 0
+              }}
             />
           );
         })}

@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator,
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Plus, Fuel, DollarSign, Activity, Calendar, Trash2, X, CheckCircle2 } from 'lucide-react-native';
+import Svg, { Path, Circle, Line, Text as SvgText, Defs, LinearGradient, Stop, G } from 'react-native-svg';
 import { api } from '../../utils/api';
 import { useAlert } from '../../utils/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
@@ -51,6 +52,110 @@ interface Stats {
   avgConsumption: number;
   costPerKm: number;
 }
+
+const FuelEfficiencyChart: React.FC<{ logs: FuelLog[]; isDark: boolean }> = ({ logs, isDark }) => {
+  const sortedLogs = [...logs].sort((a, b) => a.odometer - b.odometer);
+  
+  const efficiencies: { kmPerLiter: number; dateStr: string }[] = [];
+  for (let i = 1; i < sortedLogs.length; i++) {
+    const dist = sortedLogs[i].odometer - sortedLogs[i - 1].odometer;
+    const l = sortedLogs[i].liters;
+    if (l > 0 && dist > 0) {
+      efficiencies.push({
+        kmPerLiter: parseFloat((dist / l).toFixed(1)),
+        dateStr: sortedLogs[i].date,
+      });
+    }
+  }
+
+  const strokeColor = isDark ? '#00A3E0' : '#1C69D4';
+  const fillColor = isDark ? 'rgba(0, 163, 224, 0.12)' : 'rgba(28, 105, 212, 0.08)';
+
+  if (efficiencies.length < 2) {
+    return (
+      <View 
+        style={{ 
+          height: 90, 
+          width: '100%', 
+          borderRadius: 16, 
+          backgroundColor: isDark ? '#121620' : '#FFFFFF',
+          borderWidth: 1,
+          borderColor: isDark ? '#242D3D' : '#D8E0EB',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 12,
+          marginBottom: 16,
+        }}
+      >
+        <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 10, color: strokeColor, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+          TENDENCIA DE EFICIENCIA
+        </Text>
+        <Text style={{ fontFamily: 'Barlow-SemiBold', fontSize: 9, color: isDark ? '#A0AEC0' : '#4E5E72', marginTop: 4, textAlign: 'center' }}>
+          Registra al menos 2 recargas para ver la curva de rendimiento.
+        </Text>
+      </View>
+    );
+  }
+
+  const height = 70;
+  const width = 310;
+  const paddingX = 12;
+  const paddingY = 12;
+
+  const maxVal = Math.max(...efficiencies.map(e => e.kmPerLiter)) * 1.1;
+  const minVal = Math.min(...efficiencies.map(e => e.kmPerLiter)) * 0.9;
+  const valRange = maxVal - minVal > 0 ? maxVal - minVal : 1;
+
+  const pointsCount = efficiencies.length - 1;
+  const points = efficiencies.map((e, index) => {
+    const x = paddingX + (index / pointsCount) * (width - 2 * paddingX);
+    const y = height - paddingY - ((e.kmPerLiter - minVal) / valRange) * (height - 2 * paddingY);
+    return { x, y, val: e.kmPerLiter };
+  });
+
+  const pathD = points.map((p, index) => `${index === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+  const areaD = `${pathD} L ${points[points.length - 1].x.toFixed(1)} ${height - paddingY} L ${points[0].x.toFixed(1)} ${height - paddingY} Z`;
+
+  return (
+    <View 
+      style={{ 
+        backgroundColor: isDark ? '#121620' : '#FFFFFF',
+        borderWidth: 1,
+        borderColor: isDark ? '#242D3D' : '#D8E0EB',
+        borderRadius: 16,
+        padding: 12,
+        marginBottom: 16,
+      }}
+    >
+      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 10, color: strokeColor, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 6 }}>
+        TENDENCIA DE EFICIENCIA (KM / L)
+      </Text>
+      <View style={{ height, width: '100%', alignItems: 'center' }}>
+        <Svg width={width} height={height}>
+          <Path d={areaD} fill={fillColor} />
+          <Path d={pathD} fill="none" stroke={strokeColor} strokeWidth={1.5} strokeLinecap="round" />
+          {points.map((p, idx) => (
+            <G key={`chart-dot-${idx}`}>
+              <Circle cx={p.x} cy={p.y} r={2.5} fill="#FFFFFF" stroke={strokeColor} strokeWidth={1} />
+              {(idx === 0 || idx === points.length - 1 || points.length <= 5) && (
+                <SvgText
+                  x={p.x}
+                  y={p.y - 5}
+                  fill={isDark ? '#E2E8F0' : '#002C5B'}
+                  fontSize={7.5}
+                  fontWeight="bold"
+                  textAnchor="middle"
+                >
+                  {p.val}
+                </SvgText>
+              )}
+            </G>
+          ))}
+        </Svg>
+      </View>
+    </View>
+  );
+};
 
 export default function FuelLogsScreen() {
   const { showAlert } = useAlert();
@@ -361,6 +466,9 @@ export default function FuelLogsScreen() {
               </View>
             </View>
           </View>
+
+          {/* Fuel Efficiency Trend Curve */}
+          <FuelEfficiencyChart logs={logs} isDark={theme === 'dark'} />
 
           {/* Logs History Title */}
           <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 12, color: tftStyles.textSec, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>

@@ -327,11 +327,15 @@ export default function AlertsScreen() {
               let isWarning = false;
               let isCritical = false;
 
+              // Calculate percentage remaining for wear bar
+              let percentageRemaining = 100;
+              let remaining = 0;
+
               if (alert.isCompleted) {
                 accentColor = theme === 'light' ? '#CBD5E0' : '#242D3D';
               } else if (alert.triggerType === 'MILEAGE') {
                 const targetOdo = parseInt(alert.triggerValue);
-                const remaining = targetOdo - vehicle.currentMileage;
+                remaining = Math.max(0, targetOdo - vehicle.currentMileage);
                 if (remaining <= 0) {
                   accentColor = '#E30613';
                   isCritical = true;
@@ -342,15 +346,27 @@ export default function AlertsScreen() {
                   accentColor = colors.statusGreen;
                 }
                 triggerDesc = `A LOS ${targetOdo.toLocaleString()} KM`;
+
+                if (alert.lastPerformedValue) {
+                  const lastVal = parseInt(alert.lastPerformedValue);
+                  const interval = targetOdo - lastVal;
+                  if (interval > 0) {
+                    percentageRemaining = (remaining / interval) * 100;
+                  } else {
+                    percentageRemaining = targetOdo > 0 ? (remaining / targetOdo) * 100 : 0;
+                  }
+                } else {
+                  percentageRemaining = targetOdo > 0 ? (remaining / targetOdo) * 100 : 0;
+                }
               } else {
                 const today = new Date().getTime();
                 const targetTime = new Date(alert.triggerValue).getTime();
-                const daysLeft = Math.ceil((targetTime - today) / (1000 * 60 * 60 * 24));
+                remaining = Math.max(0, Math.ceil((targetTime - today) / (1000 * 60 * 60 * 24)));
                 
-                if (daysLeft <= 0) {
+                if (remaining <= 0) {
                   accentColor = '#E30613';
                   isCritical = true;
-                } else if (daysLeft <= 7) {
+                } else if (remaining <= 7) {
                   accentColor = '#FF9E00';
                   isWarning = true;
                 } else {
@@ -358,7 +374,20 @@ export default function AlertsScreen() {
                 }
                 
                 triggerDesc = `EXPIRACIÓN: ${new Date(alert.triggerValue).toLocaleDateString('es-ES')}`;
+
+                if (alert.lastPerformedValue) {
+                  const lastTime = new Date(alert.lastPerformedValue).getTime();
+                  const intervalDays = Math.ceil((targetTime - lastTime) / (1000 * 60 * 60 * 24));
+                  if (intervalDays > 0) {
+                    percentageRemaining = (remaining / intervalDays) * 100;
+                  } else {
+                    percentageRemaining = Math.min(100, (remaining / 365) * 100);
+                  }
+                } else {
+                  percentageRemaining = Math.min(100, (remaining / 365) * 100);
+                }
               }
+              percentageRemaining = Math.max(0, Math.min(100, percentageRemaining));
 
               return (
                 <View
@@ -369,10 +398,7 @@ export default function AlertsScreen() {
                     borderWidth: 1,
                     borderRadius: 16,
                     padding: 14,
-                    marginBottom: 14, // Spacing between cards to prevent them from sticking
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
+                    marginBottom: 14,
                     borderLeftWidth: 4,
                     borderLeftColor: accentColor,
                     opacity: alert.isCompleted ? 0.6 : 1,
@@ -467,6 +493,23 @@ export default function AlertsScreen() {
                             : new Date(alert.lastPerformedValue).toLocaleDateString('es-ES')
                           }
                         </Text>
+                      </View>
+                    )}
+
+                    {/* wear / health progress bar */}
+                    {!alert.isCompleted && (
+                      <View style={{ marginTop: 10, marginBottom: 4 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                          <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 9, color: tftStyles.timeText, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                            Salud / Vida Útil
+                          </Text>
+                          <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 9, color: accentColor, fontWeight: 'bold' }}>
+                            {Math.round(percentageRemaining)}%
+                          </Text>
+                        </View>
+                        <View style={{ height: 5, width: '100%', backgroundColor: theme === 'light' ? '#EBF0F5' : '#0A0D12', borderRadius: 4, overflow: 'hidden' }}>
+                          <View style={{ height: '100%', width: `${percentageRemaining}%`, backgroundColor: accentColor, borderRadius: 4 }} />
+                        </View>
                       </View>
                     )}
                   </View>

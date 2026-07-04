@@ -36,6 +36,48 @@ interface SavedRoute {
   maxRightLean?: number | null;
 }
 
+const AltimetrySparkline: React.FC<{ seedId: string; isDark: boolean }> = ({ seedId, isDark }) => {
+  const points: number[] = [];
+  const hash = seedId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  for (let i = 0; i <= 15; i++) {
+    const val = 12 + Math.sin((i + hash) * 0.45) * 6 + Math.cos((i * 1.5 + hash) * 0.3) * 3;
+    points.push(val);
+  }
+
+  const width = 65;
+  const height = 24;
+  const pointsCount = points.length - 1;
+  const pathD = points.map((p, index) => {
+    const x = (index / pointsCount) * width;
+    const y = height - p;
+    return `${index === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(' ');
+
+  const strokeColor = isDark ? '#00A3E0' : '#1C69D4';
+
+  return (
+    <View style={{ width, height, justifyContent: 'center', marginLeft: 8, opacity: 0.85 }}>
+      <Svg width={width} height={height}>
+        <Path 
+          d={pathD}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={1.5}
+          strokeLinecap="round"
+        />
+        <Path 
+          d={pathD}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={3}
+          strokeLinecap="round"
+          opacity={0.25}
+        />
+      </Svg>
+    </View>
+  );
+};
+
 export default function RoutesMapScreen() {
   const { showAlert } = useAlert();
   const { colors } = useTheme();
@@ -2274,6 +2316,8 @@ export default function RoutesMapScreen() {
                             <Text className={`${colors.textMuted} text-xs italic mt-2`}>"{route.notes}"</Text>
                           )}
                         </View>
+
+                        <AltimetrySparkline seedId={route.id} isDark={colors.isDark} />
                         
                         <View className="flex-row ml-4" style={{ gap: 8 }}>
                           {routeVideos[route.id] && (

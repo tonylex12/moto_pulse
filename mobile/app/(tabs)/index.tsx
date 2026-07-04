@@ -1096,25 +1096,19 @@ export default function DashboardScreen() {
                 FICHA TÉCNICA (ESPECIFICACIONES)
               </Text>
 
-              <View
-                className="p-5 mb-6"
-                style={{
-                  backgroundColor: theme === "light" ? "#FFFFFF" : "#121620",
-                  borderRadius: 20,
-                  borderWidth: 1,
-                  borderColor: theme === "light" ? "#D8E0EB" : "#242D3D",
-                }}
-              >
+              <View className="mb-6">
+                {/* Hero Showcase Card */}
                 {vehicle.imageUrl && !fetchingSpecs && (
                   <View 
                     style={{ 
-                      height: 160, 
+                      height: 180, 
                       width: '100%', 
-                      borderRadius: 12, 
+                      borderRadius: 20, 
                       overflow: 'hidden', 
                       marginBottom: 16,
                       borderWidth: 1,
-                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D'
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                      position: 'relative',
                     }}
                   >
                     <Image
@@ -1122,15 +1116,90 @@ export default function DashboardScreen() {
                       style={{ width: '100%', height: '100%' }}
                       resizeMode="cover"
                     />
+                    {/* Shadow overlay gradient approximation */}
+                    <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 75, backgroundColor: 'rgba(7, 10, 15, 0.4)' }} />
+                    <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 40, backgroundColor: 'rgba(7, 10, 15, 0.85)' }} />
+                    
+                    <View style={{ position: 'absolute', left: 16, bottom: 12, right: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <View>
+                        <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 15, color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 }}>
+                          {vehicle.brand.toUpperCase()}
+                        </Text>
+                        <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 12, color: '#00A3E0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          {vehicle.model}
+                        </Text>
+                      </View>
+                      <View style={{ backgroundColor: 'rgba(52, 199, 89, 0.15)', borderWidth: 1, borderColor: '#34C759', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+                        <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 8, color: '#34C759', fontWeight: 'bold', letterSpacing: 0.5 }}>
+                          ✓ SISTEMA OK
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
+
+                {!vehicle.imageUrl && !fetchingSpecs && (
+                  <View 
+                    style={{ 
+                      height: 100, 
+                      width: '100%', 
+                      borderRadius: 20, 
+                      overflow: 'hidden', 
+                      marginBottom: 16,
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                      backgroundColor: theme === 'light' ? '#EBF0F5' : '#121620',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 10, color: theme === 'light' ? '#8E9FBC' : '#8F9CAE', letterSpacing: 1 }}>
+                      MOTO PULSE SHOWCASE
+                    </Text>
+                    <Text style={{ fontFamily: 'Barlow-SemiBold', fontSize: 9, color: theme === 'light' ? '#4E5E72' : '#E2E8F0', marginTop: 4 }}>
+                      {vehicle.brand} {vehicle.model}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Specs Source Bar */}
+                {vehicle.specSource && !fetchingSpecs && (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                      borderRadius: 16,
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      marginBottom: 12,
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <ShieldCheck size={14} color={colors.statusGreen} />
+                      <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 10, color: theme === 'light' ? '#002C5B' : '#FFFFFF', textTransform: 'uppercase', marginLeft: 6 }}>
+                        {vehicle.specSource === 'Manual' ? 'Datos Manuales' : 'Datos Web Verificados'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={openEditSpecsModal}
+                      style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: 'rgba(28, 105, 212, 0.08)', borderRadius: 8 }}
+                    >
+                      <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 9, color: activeBmwColor, textTransform: 'uppercase' }}>Editar</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
 
                 {fetchingSpecs ? (
                   <View
-                    className="py-4 items-center justify-center mb-4"
+                    className="p-6 items-center justify-center rounded-2xl"
                     style={{
-                      borderBottomWidth: 1,
-                      borderBottomColor: theme === "light" ? "#D8E0EB" : "#242D3D",
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
                     }}
                   >
                     <ActivityIndicator size="small" color={activeBmwColor} />
@@ -1143,12 +1212,15 @@ export default function DashboardScreen() {
                   </View>
                 ) : !vehicle.specSource ? (
                   <View
-                    className="border border-dashed rounded-xl p-4 mb-4 items-center justify-center"
-                    style={{ borderColor: theme === "light" ? "#D8E0EB" : "#242D3D" }}
+                    className="border border-dashed rounded-2xl p-6 items-center justify-center"
+                    style={{ 
+                      borderColor: theme === "light" ? "#D8E0EB" : "#242D3D",
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                    }}
                   >
                     <Text
                       style={{ color: theme === 'light' ? '#4E5E72' : '#E2E8F0' }}
-                      className="text-xs text-center mb-3 leading-normal font-sans"
+                      className="text-xs text-center mb-4 leading-normal font-sans"
                     >
                       Ficha técnica vacía. Puedes buscar sus especificaciones
                       técnicas reales en la web utilizando Inteligencia
@@ -1182,205 +1254,209 @@ export default function DashboardScreen() {
                     </View>
                   </View>
                 ) : (
-                  <View
-                    className="mb-4 pb-3"
-                    style={{
-                      borderBottomWidth: 1,
-                      borderBottomColor: theme === "light" ? "#D8E0EB" : "#242D3D",
-                    }}
-                  >
-                    <View className="flex-row justify-between items-center mb-1.5">
-                      <View className="flex-row items-center">
-                        <ShieldCheck size={16} color={colors.statusGreen} />
-                        <Text
-                          style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
-                          className="text-xs font-bold uppercase ml-1.5 tracking-wider"
-                        >
-                          {vehicle.specSource === 'Manual' ? 'Datos Manuales' : 'Datos de Internet'}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={openEditSpecsModal}
-                        className="px-2 py-1 bg-neutral-500/10 rounded-lg flex-row items-center"
-                      >
-                        <Pencil size={10} color={theme === 'light' ? '#1C69D4' : '#00A3E0'} />
-                        <Text className="text-[9px] font-bold uppercase ml-1" style={{ color: theme === 'light' ? '#1C69D4' : '#00A3E0' }}>Editar</Text>
-                      </TouchableOpacity>
+                  // Bento Grid
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                    
+                    {/* Bento Box 1: Motor */}
+                    <View style={{
+                      width: '48%',
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                      borderRadius: 16,
+                      padding: 12,
+                      marginBottom: 12,
+                    }}>
+                      <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 9, color: theme === 'light' ? '#8E9FBC' : '#A0AEC0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Cilindrada
+                      </Text>
+                      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 15, color: theme === 'light' ? '#002C5B' : '#FFFFFF', marginTop: 4, fontWeight: 'bold' }}>
+                        {vehicle.engineCc || "No disponible"}
+                      </Text>
                     </View>
-                    <Text className="text-[9px] text-neutral-500 uppercase tracking-widest mt-1">
-                      Fuente: {vehicle.specSource}
-                    </Text>
+
+                    {/* Bento Box 2: Depósito */}
+                    <View style={{
+                      width: '48%',
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                      borderRadius: 16,
+                      padding: 12,
+                      marginBottom: 12,
+                    }}>
+                      <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 9, color: theme === 'light' ? '#8E9FBC' : '#A0AEC0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Depósito
+                      </Text>
+                      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 15, color: theme === 'light' ? '#002C5B' : '#FFFFFF', marginTop: 4, fontWeight: 'bold' }}>
+                        {vehicle.tankSize || "No disponible"}
+                      </Text>
+                    </View>
+
+                    {/* Bento Box 3: Potencia */}
+                    <View style={{
+                      width: '48%',
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                      borderRadius: 16,
+                      padding: 12,
+                      marginBottom: 12,
+                    }}>
+                      <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 9, color: theme === 'light' ? '#8E9FBC' : '#A0AEC0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Potencia
+                      </Text>
+                      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 15, color: theme === 'light' ? '#002C5B' : '#FFFFFF', marginTop: 4, fontWeight: 'bold' }}>
+                        {vehicle.power || "No disponible"}
+                      </Text>
+                    </View>
+
+                    {/* Bento Box 4: Torque */}
+                    <View style={{
+                      width: '48%',
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                      borderRadius: 16,
+                      padding: 12,
+                      marginBottom: 12,
+                    }}>
+                      <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 9, color: theme === 'light' ? '#8E9FBC' : '#A0AEC0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Torque
+                      </Text>
+                      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 15, color: theme === 'light' ? '#002C5B' : '#FFFFFF', marginTop: 4, fontWeight: 'bold' }}>
+                        {vehicle.torque || "No disponible"}
+                      </Text>
+                    </View>
+
+                    {/* Bento Box 5: Transmisión */}
+                    <View style={{
+                      width: '48%',
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                      borderRadius: 16,
+                      padding: 12,
+                      marginBottom: 12,
+                    }}>
+                      <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 9, color: theme === 'light' ? '#8E9FBC' : '#A0AEC0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Transmisión
+                      </Text>
+                      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 15, color: theme === 'light' ? '#002C5B' : '#FFFFFF', marginTop: 4, fontWeight: 'bold' }}>
+                        {vehicle.transmission || "No disponible"}
+                      </Text>
+                    </View>
+
+                    {/* Bento Box 6: Peso */}
+                    <View style={{
+                      width: '48%',
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                      borderRadius: 16,
+                      padding: 12,
+                      marginBottom: 12,
+                    }}>
+                      <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 9, color: theme === 'light' ? '#8E9FBC' : '#A0AEC0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Peso
+                      </Text>
+                      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 15, color: theme === 'light' ? '#002C5B' : '#FFFFFF', marginTop: 4, fontWeight: 'bold' }}>
+                        {vehicle.weight || "No disponible"}
+                      </Text>
+                    </View>
+
+                    {/* Bento Box 7: Neumáticos */}
+                    <View style={{
+                      width: '100%',
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                      borderRadius: 16,
+                      padding: 12,
+                      marginBottom: 12,
+                    }}>
+                      <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 9, color: theme === 'light' ? '#8E9FBC' : '#A0AEC0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Neumáticos (Delantero / Trasero)
+                      </Text>
+                      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 15, color: theme === 'light' ? '#002C5B' : '#FFFFFF', marginTop: 4, fontWeight: 'bold' }}>
+                        {vehicle.frontTire || "No disp."} / {vehicle.rearTire || "No disp."}
+                      </Text>
+                    </View>
+
+                    {/* Bento Box 8: Freno Delantero */}
+                    <View style={{
+                      width: '48%',
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                      borderRadius: 16,
+                      padding: 12,
+                      marginBottom: 12,
+                    }}>
+                      <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 9, color: theme === 'light' ? '#8E9FBC' : '#A0AEC0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Freno Delantero
+                      </Text>
+                      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 14, color: theme === 'light' ? '#002C5B' : '#FFFFFF', marginTop: 4, fontWeight: 'bold' }}>
+                        {vehicle.frontBrake || "No disponible"}
+                      </Text>
+                    </View>
+
+                    {/* Bento Box 9: Freno Trasero */}
+                    <View style={{
+                      width: '48%',
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                      borderRadius: 16,
+                      padding: 12,
+                      marginBottom: 12,
+                    }}>
+                      <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 9, color: theme === 'light' ? '#8E9FBC' : '#A0AEC0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Freno Trasero
+                      </Text>
+                      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 14, color: theme === 'light' ? '#002C5B' : '#FFFFFF', marginTop: 4, fontWeight: 'bold' }}>
+                        {vehicle.rearBrake || "No disponible"}
+                      </Text>
+                    </View>
+
+                    {/* Bento Box 10: Suspensión Delantera */}
+                    <View style={{
+                      width: '48%',
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                      borderRadius: 16,
+                      padding: 12,
+                      marginBottom: 12,
+                    }}>
+                      <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 9, color: theme === 'light' ? '#8E9FBC' : '#A0AEC0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Suspensión Del.
+                      </Text>
+                      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 13, color: theme === 'light' ? '#002C5B' : '#FFFFFF', marginTop: 4, fontWeight: 'bold' }}>
+                        {vehicle.frontSuspension || "No disponible"}
+                      </Text>
+                    </View>
+
+                    {/* Bento Box 11: Suspensión Trasera */}
+                    <View style={{
+                      width: '48%',
+                      backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620',
+                      borderWidth: 1,
+                      borderColor: theme === 'light' ? '#D8E0EB' : '#242D3D',
+                      borderRadius: 16,
+                      padding: 12,
+                      marginBottom: 12,
+                    }}>
+                      <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 9, color: theme === 'light' ? '#8E9FBC' : '#A0AEC0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Suspensión Tras.
+                      </Text>
+                      <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 13, color: theme === 'light' ? '#002C5B' : '#FFFFFF', marginTop: 4, fontWeight: 'bold' }}>
+                        {vehicle.rearSuspension || "No disponible"}
+                      </Text>
+                    </View>
+
                   </View>
                 )}
-
-                <View className="flex-row flex-wrap">
-                  <View className="w-1/2 pr-2 mb-3.5">
-                    <Text
-                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
-                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-0.5"
-                    >
-                      Motor / Cilindrada
-                    </Text>
-                    <Text
-                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
-                      className="font-rajdhani-semibold text-base font-semibold"
-                    >
-                      {vehicle.engineCc || "No disponible"}
-                    </Text>
-                  </View>
-                  <View className="w-1/2 pl-2 mb-3.5">
-                    <Text
-                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
-                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-0.5"
-                    >
-                      Depósito
-                    </Text>
-                    <Text
-                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
-                      className="font-rajdhani-semibold text-base font-semibold"
-                    >
-                      {vehicle.tankSize || "No disponible"}
-                    </Text>
-                  </View>
-
-                  <View className="w-1/2 pr-2 mb-3.5">
-                    <Text
-                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
-                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-0.5"
-                    >
-                      Potencia
-                    </Text>
-                    <Text
-                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
-                      className="font-rajdhani-semibold text-base font-semibold"
-                    >
-                      {vehicle.power || "No disponible"}
-                    </Text>
-                  </View>
-                  <View className="w-1/2 pl-2 mb-3.5">
-                    <Text
-                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
-                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-0.5"
-                    >
-                      Torque
-                    </Text>
-                    <Text
-                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
-                      className="font-rajdhani-semibold text-base font-semibold"
-                    >
-                      {vehicle.torque || "No disponible"}
-                    </Text>
-                  </View>
-
-                  <View className="w-1/2 pr-2 mb-3.5">
-                    <Text
-                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
-                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-0.5"
-                    >
-                      Transmisión
-                    </Text>
-                    <Text
-                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
-                      className="font-rajdhani-semibold text-base font-semibold"
-                    >
-                      {vehicle.transmission || "No disponible"}
-                    </Text>
-                  </View>
-                  <View className="w-1/2 pl-2 mb-3.5">
-                    <Text
-                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
-                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-0.5"
-                    >
-                      Peso
-                    </Text>
-                    <Text
-                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
-                      className="font-rajdhani-semibold text-base font-semibold"
-                    >
-                      {vehicle.weight || "No disponible"}
-                    </Text>
-                  </View>
-
-                  <View
-                    className="w-full pt-3 mt-1.5 mb-3.5"
-                    style={{
-                      borderTopWidth: 1,
-                      borderTopColor: theme === "light" ? "#D8E0EB" : "#242D3D",
-                    }}
-                  >
-                    <Text
-                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
-                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-1"
-                    >
-                      Neumáticos (Del / Tras)
-                    </Text>
-                    <Text
-                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
-                      className="font-rajdhani-semibold text-base font-semibold"
-                    >
-                      {vehicle.frontTire || "No disp."} /{" "}
-                      {vehicle.rearTire || "No disp."}
-                    </Text>
-                  </View>
-
-                  <View className="w-full mb-3.5">
-                    <Text
-                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
-                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-1"
-                    >
-                      Freno Delantero
-                    </Text>
-                    <Text
-                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
-                      className="font-rajdhani-semibold text-base font-semibold"
-                    >
-                      {vehicle.frontBrake || "No disponible"}
-                    </Text>
-                  </View>
-                  <View className="w-full mb-3.5">
-                    <Text
-                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
-                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-1"
-                    >
-                      Freno Trasero
-                    </Text>
-                    <Text
-                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
-                      className="font-rajdhani-semibold text-base font-semibold"
-                    >
-                      {vehicle.rearBrake || "No disponible"}
-                    </Text>
-                  </View>
-
-                  <View className="w-full mb-3.5">
-                    <Text
-                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
-                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-1"
-                    >
-                      Suspensión Delantera
-                    </Text>
-                    <Text
-                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
-                      className="font-rajdhani-semibold text-base font-semibold"
-                    >
-                      {vehicle.frontSuspension || "No disponible"}
-                    </Text>
-                  </View>
-                  <View className="w-full">
-                    <Text
-                      style={{ color: theme === 'light' ? '#8E9FBC' : '#A0AEC0' }}
-                      className="font-barlow-condensed-bold text-[10px] uppercase font-bold tracking-wider mb-1"
-                    >
-                      Suspensión Trasera
-                    </Text>
-                    <Text
-                      style={{ color: theme === 'light' ? '#002C5B' : '#FFFFFF' }}
-                      className="font-rajdhani-semibold text-base font-semibold"
-                    >
-                      {vehicle.rearSuspension || "No disponible"}
-                    </Text>
-                  </View>
-                </View>
               </View>
 
               {/* Dashboard Subtitle */}
