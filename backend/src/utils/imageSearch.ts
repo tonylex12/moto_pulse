@@ -32,12 +32,42 @@ async function fetchTargetUrlsFromYahoo(queryText: string): Promise<string[]> {
   }
 }
 
+function isUrlRelevantToModel(urlText: string, brand: string, model: string): boolean {
+  const lowerUrl = urlText.toLowerCase();
+  const lowerModel = model.toLowerCase();
+  const cleanModel = lowerModel.replace(/[^a-z0-9]/g, '');
+
+  if (lowerUrl.includes(cleanModel)) return true;
+
+  // Split model into words and check if all words are in URL
+  const modelWords = lowerModel.split(/[^a-z0-9]+/g).filter(w => w.length > 0);
+  if (modelWords.length > 0 && modelWords.every(word => lowerUrl.includes(word))) {
+    return true;
+  }
+
+  // Detect conflicting model codes in the URL path to avoid fuzzy matching wrong models (e.g. XR190L when requesting NX190)
+  const codeRegex = /\b[a-z]+\d+[a-z]*\b/g;
+  const codes = lowerUrl.match(codeRegex) || [];
+  for (const code of codes) {
+    const cleanCode = code.replace(/[^a-z0-9]/g, '');
+    if (cleanCode !== cleanModel) {
+      // Allow if one is a prefix of another to support sub-displacement models (e.g. 'gts300' when model is 'gts')
+      if (cleanCode.startsWith(cleanModel) || cleanModel.startsWith(cleanCode)) {
+        continue;
+      }
+      return false;
+    }
+  }
+
+  return true;
+}
+
 /**
  * Keyless, scraper-based search utility to fetch a representative motorcycle image URL.
  * It queries DuckDuckGo for the bike model, extracts the first search result link,
  * and scrapes its OpenGraph (og:image) featured image tag.
  */
-async function scrapeImageForQuery(queryText: string): Promise<string | null> {
+async function scrapeImageForQuery(queryText: string, brand: string, model: string): Promise<string | null> {
   const query = encodeURIComponent(queryText);
   const url = `https://html.duckduckgo.com/html/?q=${query}`;
 
@@ -71,16 +101,21 @@ async function scrapeImageForQuery(queryText: string): Promise<string | null> {
           targetUrl = decodeURIComponent(parts[1].split('&')[0]);
         }
       }
-      // Filter out duckduckgo urls or advertisements if any
+      // Filter out duckduckgo urls, advertisements, and irrelevant models
       if (targetUrl.startsWith('http') && !targetUrl.includes('duckduckgo.com')) {
-        targetUrls.push(targetUrl);
+        if (isUrlRelevantToModel(targetUrl, brand, model)) {
+          targetUrls.push(targetUrl);
+        } else {
+          console.log(`⚠️ Filtered out irrelevant URL candidate: ${targetUrl}`);
+        }
       }
     }
 
     if (targetUrls.length === 0) {
       console.log(`⚠️ DDG returned 0 links for image search. Falling back to Yahoo...`);
       const yahooUrls = await fetchTargetUrlsFromYahoo(queryText);
-      targetUrls.push(...yahooUrls);
+      const filteredYahoo = yahooUrls.filter(u => isUrlRelevantToModel(u, brand, model));
+      targetUrls.push(...filteredYahoo);
     }
 
     // Sort targetUrls so that high-quality domains come first
@@ -167,22 +202,21 @@ async function scrapeImageForQuery(queryText: string): Promise<string | null> {
 
   return null;
 }
-
 export async function fetchVehicleImage(brand: string, model: string, year: number): Promise<string | null> {
   // 1. Try local catalog query to match national market catalogs (somosmoto.pe, motocorp.pe, efe.com.pe)
   const localQuery = `${brand} ${model} site:somosmoto.pe OR site:motocorp.pe OR site:efe.com.pe`;
   console.log(`🔍 Scraping image search for local catalog: ${localQuery}...`);
-  const localImg = await scrapeImageForQuery(localQuery);
+  const localImg = await scrapeImageForQuery(localQuery, brand, model);
   if (localImg) return localImg;
 
   // 2. Try general spanish query
   const queryEs = `${brand} ${model} ${year} moto fotografia foto`;
   console.log(`🔍 Scraping image search for general Spanish: ${queryEs}...`);
-  const esImg = await scrapeImageForQuery(queryEs);
+  const esImg = await scrapeImageForQuery(queryEs, brand, model);
   if (esImg) return esImg;
 
   // 3. Fallback to general english query
   const queryText = `${brand} ${model} ${year} motorcycle photo review`;
   console.log(`🔍 Scraping image search for: ${queryText}...`);
-  return await scrapeImageForQuery(queryText);
+  return await scrapeImageForQuery(queryText, brand, model);
 }

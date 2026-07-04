@@ -523,6 +523,35 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
 
   return specs;
 }
+function isSnippetRelevantToModel(snippet: string, brand: string, model: string): boolean {
+  const lowerSnippet = snippet.toLowerCase();
+  const lowerModel = model.toLowerCase();
+  const cleanModel = lowerModel.replace(/[^a-z0-9]/g, '');
+
+  if (lowerSnippet.includes(cleanModel)) return true;
+
+  // Split model into words and check if all words are in snippet
+  const modelWords = lowerModel.split(/[^a-z0-9]+/g).filter(w => w.length > 0);
+  if (modelWords.length > 0 && modelWords.every(word => lowerSnippet.includes(word))) {
+    return true;
+  }
+
+  // Detect conflicting model codes in the snippet to avoid fuzzy matching wrong models (e.g. XR190L when requesting NX190)
+  const codeRegex = /\b[a-z]+\d+[a-z]*\b/g;
+  const codes = lowerSnippet.match(codeRegex) || [];
+  for (const code of codes) {
+    const cleanCode = code.replace(/[^a-z0-9]/g, '');
+    if (cleanCode !== cleanModel) {
+      // Allow if one is a prefix of another to support sub-displacement models (e.g. 'gts300' when model is 'gts')
+      if (cleanCode.startsWith(cleanModel) || cleanModel.startsWith(cleanCode)) {
+        continue;
+      }
+      return false;
+    }
+  }
+
+  return true;
+}
 
 /**
  * Searches DuckDuckGo HTML interface (and falls back to Yahoo Search)
@@ -530,13 +559,15 @@ function extractSpecsWithScoring(snippetsList: string[]): VehicleSpecs {
  * This is 100% keyless, reliable, and does not require an AI API key.
  */
 export async function fetchVehicleSpecs(brand: string, model: string, year: number): Promise<VehicleSpecs | null> {
+  const filterFn = (s: string) => isSnippetRelevantToModel(s, brand, model);
+
   // 1. Try Spanish query first
   const queryEs = `${brand} ${model} ${year} ficha tecnica especificaciones`;
   console.log(`🔍 Scraping specs (Spanish) for: ${queryEs}...`);
-  let snippetsEs = await fetchSnippetsFromDDG(queryEs);
+  let snippetsEs = (await fetchSnippetsFromDDG(queryEs)).filter(filterFn);
   if (snippetsEs.length === 0) {
     console.log(`⚠️ DDG returned 0 results. Falling back to Yahoo Search (Spanish)...`);
-    snippetsEs = await fetchSnippetsFromYahoo(queryEs);
+    snippetsEs = (await fetchSnippetsFromYahoo(queryEs)).filter(filterFn);
   }
 
   console.log(`🤖 Found ${snippetsEs.length} Spanish web text snippets to parse.`);
@@ -549,12 +580,11 @@ export async function fetchVehicleSpecs(brand: string, model: string, year: numb
   if (isIncomplete) {
     const queryEn = `${brand} ${model} ${year} specs specifications technical data`;
     console.log(`🔍 Specs incomplete (key fields missing). Scraping specs (English) for: ${queryEn}...`);
-    let snippetsEn = await fetchSnippetsFromDDG(queryEn);
+    let snippetsEn = (await fetchSnippetsFromDDG(queryEn)).filter(filterFn);
     if (snippetsEn.length === 0) {
       console.log(`⚠️ DDG returned 0 results. Falling back to Yahoo Search (English)...`);
-      snippetsEn = await fetchSnippetsFromYahoo(queryEn);
+      snippetsEn = (await fetchSnippetsFromYahoo(queryEn)).filter(filterFn);
     }
-
     console.log(`🤖 Found ${snippetsEn.length} English web text snippets to parse.`);
     if (snippetsEn.length > 0) {
       try {
