@@ -537,7 +537,8 @@ function isSnippetRelevantToModel(snippet: string, brand: string, model: string)
   }
 
   // Detect conflicting model codes in the snippet to avoid fuzzy matching wrong models (e.g. XR190L when requesting NX190)
-  const codeRegex = /\b[a-z]+\d+[a-z]*\b/g;
+  // Matches letters followed by an optional separator (hyphen, underscore, space, slash) and digits (e.g. dr-160, cb-190r)
+  const codeRegex = /\b[a-z]+[-_/\s]?\d+[a-z]*\b/g;
   const codes = lowerSnippet.match(codeRegex) || [];
   let foundConflict = false;
   for (const code of codes) {
