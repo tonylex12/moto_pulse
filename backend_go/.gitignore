@@ -1,0 +1,26 @@
+# Environment variables
+.env
+.env.*
+
+# Compiled binaries
+backend_go
+main
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+*.out
+
+# IDEs and OS files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
