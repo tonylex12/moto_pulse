@@ -476,3 +476,116 @@ func TriggerLookup(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"success":true,"message":"Lookup triggered in background"}`))
 }
+
+// RunDeepSpecsAndImageLookup is a background worker that runs the deep search scraper.
+func RunDeepSpecsAndImageLookup(vehicleID string, brand, model string, year int) {
+	log.Printf("🤖 Starting DEEP background lookup for Vehicle ID %s (%s %s %d)...", vehicleID, brand, model, year)
+
+	// Fetch technical specs deeply
+	specs, err := scraper.FetchVehicleSpecsDeep(brand, model, year)
+	if err != nil {
+		log.Printf("⚠️ Deep background specs lookup failed for vehicle %s: %v", vehicleID, err)
+	}
+
+	// Fetch image if not present or default
+	var imgUrl string
+	var currentVehicle db.Vehicle
+	if err := db.DB.First(&currentVehicle, "id = ?", vehicleID).Error; err == nil {
+		if currentVehicle.ImageUrl == nil || *currentVehicle.ImageUrl == "" {
+			img, err := scraper.FetchVehicleImage(brand, model, year)
+			if err != nil {
+				log.Printf("⚠️ Deep background image lookup failed for vehicle %s: %v", vehicleID, err)
+			} else {
+				imgUrl = img
+			}
+		}
+	}
+
+	// Update vehicle record with scraped specs and image
+	updates := map[string]interface{}{}
+	if imgUrl != "" {
+		updates["imageUrl"] = imgUrl
+	}
+
+	if specs != nil {
+		// Selectively update fields that are currently nil or empty
+		if specs.TankSize != nil && (currentVehicle.TankSize == nil || *currentVehicle.TankSize == "") {
+			updates["tankSize"] = *specs.TankSize
+		}
+		if specs.FrontBrake != nil && (currentVehicle.FrontBrake == nil || *currentVehicle.FrontBrake == "") {
+			updates["frontBrake"] = *specs.FrontBrake
+		}
+		if specs.RearBrake != nil && (currentVehicle.RearBrake == nil || *currentVehicle.RearBrake == "") {
+			updates["rearBrake"] = *specs.RearBrake
+		}
+		if specs.FrontSuspension != nil && (currentVehicle.FrontSuspension == nil || *currentVehicle.FrontSuspension == "") {
+			updates["frontSuspension"] = *specs.FrontSuspension
+		}
+		if specs.RearSuspension != nil && (currentVehicle.RearSuspension == nil || *currentVehicle.RearSuspension == "") {
+			updates["rearSuspension"] = *specs.RearSuspension
+		}
+		if specs.FrontTire != nil && (currentVehicle.FrontTire == nil || *currentVehicle.FrontTire == "") {
+			updates["frontTire"] = *specs.FrontTire
+		}
+		if specs.RearTire != nil && (currentVehicle.RearTire == nil || *currentVehicle.RearTire == "") {
+			updates["rearTire"] = *specs.RearTire
+		}
+		if specs.EngineCc != nil && (currentVehicle.EngineCc == nil || *currentVehicle.EngineCc == "") {
+			updates["engineCc"] = *specs.EngineCc
+		}
+		if specs.Power != nil && (currentVehicle.Power == nil || *currentVehicle.Power == "") {
+			updates["power"] = *specs.Power
+		}
+		if specs.Torque != nil && (currentVehicle.Torque == nil || *currentVehicle.Torque == "") {
+			updates["torque"] = *specs.Torque
+		}
+		if specs.Transmission != nil && (currentVehicle.Transmission == nil || *currentVehicle.Transmission == "") {
+			updates["transmission"] = *specs.Transmission
+		}
+		if specs.Weight != nil && (currentVehicle.Weight == nil || *currentVehicle.Weight == "") {
+			updates["weight"] = *specs.Weight
+		}
+		if specs.SeatHeight != nil && (currentVehicle.SeatHeight == nil || *currentVehicle.SeatHeight == "") {
+			updates["seatHeight"] = *specs.SeatHeight
+		}
+		updates["specSource"] = "Búsqueda Web"
+	}
+
+	if len(updates) > 1 || (len(updates) == 1 && updates["specSource"] == nil) {
+		err := db.DB.Model(&db.Vehicle{}).Where("id = ?", vehicleID).Updates(updates).Error
+		if err != nil {
+			log.Printf("❌ Failed to update vehicle %s in deep background: %v", vehicleID, err)
+		} else {
+			log.Printf("✅ Deep background lookup completed and updated vehicle ID %s.", vehicleID)
+		}
+	}
+}
+
+// ScrapeVehicleSpecs handles triggering a deep background search to fill missing specs
+func ScrapeVehicleSpecs(w http.ResponseWriter, r *http.Request) {
+	clerkId, err := middleware.GetClerkUserID(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	var vehicle db.Vehicle
+	if err := db.DB.First(&vehicle, "id = ?", id).Error; err != nil {
+		http.Error(w, `{"error":"Vehicle not found"}`, http.StatusNotFound)
+		return
+	}
+
+	if vehicle.UserID != clerkId {
+		http.Error(w, `{"error":"Forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	// Trigger deep lookup in background goroutine
+	go RunDeepSpecsAndImageLookup(vehicle.ID, vehicle.Brand, vehicle.Model, vehicle.Year)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte(`{"success":true,"message":"Búsqueda exhaustiva iniciada en segundo plano"}`))
+}
+

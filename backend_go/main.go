@@ -75,6 +75,7 @@ func main() {
 		sub.Delete("/api/vehicles/{id}", handlers.DeleteVehicle)
 		sub.Put("/api/vehicles/{id}/active", handlers.ToggleActiveVehicle)
 		sub.Post("/api/vehicles/{id}/trigger-lookup", handlers.TriggerLookup)
+		sub.Post("/api/vehicles/{id}/scrape", handlers.ScrapeVehicleSpecs)
 
 		// Fuel Log endpoints
 		sub.Get("/api/fuel-logs/vehicle/{vehicleId}", handlers.GetVehicleFuelLogs)

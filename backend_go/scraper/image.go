@@ -95,6 +95,22 @@ func isUrlRelevantToModel(urlText, brand, model string) bool {
 		}
 	}
 
+	// Also split letters and numbers (e.g. "nx190" -> "nx", "190") to match URLs like "honda-nx-190"
+	reLettersNumbers := regexp.MustCompile(`([a-zA-Z]+)|(\d+)`)
+	matches := reLettersNumbers.FindAllString(lowerModel, -1)
+	if len(matches) > 1 {
+		allMatch := true
+		for _, w := range matches {
+			if !strings.Contains(lowerURL, w) {
+				allMatch = false
+				break
+			}
+		}
+		if allMatch {
+			return true
+		}
+	}
+
 	codeRegex := regexp.MustCompile(`\b[a-z]+[-_/\s]?\d+[a-z]*\b`)
 	codes := codeRegex.FindAllString(lowerURL, -1)
 	foundConflict := false
@@ -139,51 +155,57 @@ func scrapeImageForQuery(queryText, brand, model string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("duckduckgo returned status %d", resp.StatusCode)
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	htmlContent := string(bodyBytes)
-
-	snippetRegex := regexp.MustCompile(`<a class="result__snippet"[^>]*href="([^"]+)"`)
-	matches := snippetRegex.FindAllStringSubmatch(htmlContent, -1)
-	
 	var targetUrls []string
-	for _, m := range matches {
-		if len(m) < 2 {
-			continue
-		}
-		targetUrl := m[1]
-		if strings.Contains(targetUrl, "uddg=") {
-			parts := strings.Split(targetUrl, "uddg=")
-			if len(parts) >= 2 {
-				decoded, err := url.QueryUnescape(strings.Split(parts[1], "&")[0])
-				if err == nil {
-					targetUrl = decoded
-				}
-			}
-		}
 
-		if strings.HasPrefix(targetUrl, "http") && !strings.Contains(targetUrl, "duckduckgo.com") {
-			if isUrlRelevantToModel(targetUrl, brand, model) {
-				targetUrls = append(targetUrls, targetUrl)
-			} else {
-				log.Printf("⚠️ Filtered out irrelevant URL candidate: %s", targetUrl)
-			}
-		}
-	}
-
-	if len(targetUrls) == 0 {
-		log.Printf("⚠️ DDG returned 0 links for image search. Falling back to Yahoo...")
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("⚠️ Duckduckgo returned status %d. Falling back to Yahoo search...", resp.StatusCode)
 		yahooUrls, err := fetchTargetUrlsFromYahoo(queryText)
 		if err == nil {
 			for _, u := range yahooUrls {
 				if isUrlRelevantToModel(u, brand, model) {
 					targetUrls = append(targetUrls, u)
+				}
+			}
+		}
+	} else {
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err == nil {
+			htmlContent := string(bodyBytes)
+			snippetRegex := regexp.MustCompile(`<a class="result__snippet"[^>]*href="([^"]+)"`)
+			matches := snippetRegex.FindAllStringSubmatch(htmlContent, -1)
+			for _, m := range matches {
+				if len(m) < 2 {
+					continue
+				}
+				targetUrl := m[1]
+				if strings.Contains(targetUrl, "uddg=") {
+					parts := strings.Split(targetUrl, "uddg=")
+					if len(parts) >= 2 {
+						decoded, err := url.QueryUnescape(strings.Split(parts[1], "&")[0])
+						if err == nil {
+							targetUrl = decoded
+						}
+					}
+				}
+
+				if strings.HasPrefix(targetUrl, "http") && !strings.Contains(targetUrl, "duckduckgo.com") {
+					if isUrlRelevantToModel(targetUrl, brand, model) {
+						targetUrls = append(targetUrls, targetUrl)
+					} else {
+						log.Printf("⚠️ Filtered out irrelevant URL candidate: %s", targetUrl)
+					}
+				}
+			}
+		}
+
+		if len(targetUrls) == 0 {
+			log.Printf("⚠️ DDG returned 0 links for image search. Falling back to Yahoo...")
+			yahooUrls, err := fetchTargetUrlsFromYahoo(queryText)
+			if err == nil {
+				for _, u := range yahooUrls {
+					if isUrlRelevantToModel(u, brand, model) {
+						targetUrls = append(targetUrls, u)
+					}
 				}
 			}
 		}
@@ -305,22 +327,26 @@ func scrapeImageForQuery(queryText, brand, model string) (string, error) {
 }
 
 func FetchVehicleImage(brand, model string, year int) (string, error) {
+	// Insert space between letters and numbers for search query optimization (e.g. DL160 -> DL 160)
+	re := regexp.MustCompile(`([a-zA-Z]+)(\d+)`)
+	searchModel := re.ReplaceAllString(model, "$1 $2")
+
 	// 1. Try local catalog query
-	localQuery := fmt.Sprintf("%s %s site:somosmoto.pe OR site:motocorp.pe OR site:efe.com.pe", brand, model)
+	localQuery := fmt.Sprintf("%s %s site:somosmoto.pe OR site:motocorp.pe OR site:efe.com.pe", brand, searchModel)
 	log.Printf("🔍 Scraping image search for local catalog: %s...", localQuery)
 	if img, err := scrapeImageForQuery(localQuery, brand, model); err == nil && img != "" {
 		return img, nil
 	}
 
 	// 2. Try general Spanish query
-	queryEs := fmt.Sprintf("%s %s %d moto fotografia foto", brand, model, year)
+	queryEs := fmt.Sprintf("%s %s %d moto fotografia foto", brand, searchModel, year)
 	log.Printf("🔍 Scraping image search for general Spanish: %s...", queryEs)
 	if img, err := scrapeImageForQuery(queryEs, brand, model); err == nil && img != "" {
 		return img, nil
 	}
 
 	// 3. Fallback to general English query
-	queryEn := fmt.Sprintf("%s %s %d motorcycle photo review", brand, model, year)
+	queryEn := fmt.Sprintf("%s %s %d motorcycle photo review", brand, searchModel, year)
 	log.Printf("🔍 Scraping image search for general English: %s...", queryEn)
 	return scrapeImageForQuery(queryEn, brand, model)
 }

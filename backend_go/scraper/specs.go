@@ -91,6 +91,22 @@ func isSnippetRelevantToModel(snippet, brand, model string) bool {
 		}
 	}
 
+	// Also split letters and numbers (e.g. "nx190" -> "nx", "190") to match snippets containing "NX 190"
+	reLettersNumbers := regexp.MustCompile(`([a-zA-Z]+)|(\d+)`)
+	matchesLettersNumbers := reLettersNumbers.FindAllString(lowerModel, -1)
+	if len(matchesLettersNumbers) > 1 {
+		allMatch := true
+		for _, w := range matchesLettersNumbers {
+			if !strings.Contains(lowerSnippet, w) {
+				allMatch = false
+				break
+			}
+		}
+		if allMatch {
+			return true
+		}
+	}
+
 	// Restrict prefix to 2-4 letters to prevent matching long words like "combustible" or "autonomia"
 	codeRegex := regexp.MustCompile(`\b([a-z]{2,4})[-_/\s]?\d+[a-z]*\b`)
 	matches := codeRegex.FindAllStringSubmatch(lowerSnippet, -1)
@@ -806,8 +822,11 @@ func FetchVehicleSpecs(brand, model string, year int) (*VehicleSpecs, error) {
 		return isSnippetRelevantToModel(s, brand, model)
 	}
 
+	re := regexp.MustCompile(`([a-zA-Z]+)(\d+)`)
+	searchModel := re.ReplaceAllString(model, "$1 $2")
+
 	// 1. Try Spanish query first
-	queryEs := fmt.Sprintf("%s %s %d ficha tecnica especificaciones", brand, model, year)
+	queryEs := fmt.Sprintf("%s %s %d ficha tecnica especificaciones", brand, searchModel, year)
 	log.Printf("🔍 Scraping specs (Spanish) for: %s...", queryEs)
 	
 	snippets, err := fetchSnippetsFromDDG(queryEs)
@@ -841,7 +860,7 @@ func FetchVehicleSpecs(brand, model string, year int) (*VehicleSpecs, error) {
 	// 2. English query fallback if specs are incomplete
 	keyFieldsMissing := specs.EngineCc == nil || specs.Power == nil || specs.Torque == nil || specs.TankSize == nil || specs.Weight == nil
 	if keyFieldsMissing {
-		queryEn := fmt.Sprintf("%s %s %d specs specifications technical data", brand, model, year)
+		queryEn := fmt.Sprintf("%s %s %d specs specifications technical data", brand, searchModel, year)
 		log.Printf("🔍 Specs incomplete (key fields missing). Scraping specs (English) for: %s...", queryEn)
 		
 		snippetsEn, err := fetchSnippetsFromDDG(queryEn)
@@ -917,3 +936,70 @@ func FetchVehicleSpecs(brand, model string, year int) (*VehicleSpecs, error) {
 
 	return &specs, nil
 }
+
+// FetchVehicleSpecsDeep executes multiple targeted search queries across multiple languages
+// and combines the snippets to maximize the chance of filling all motorcycle specifications.
+func FetchVehicleSpecsDeep(brand, model string, year int) (*VehicleSpecs, error) {
+	filterFn := func(s string) bool {
+		return isSnippetRelevantToModel(s, brand, model)
+	}
+
+	re := regexp.MustCompile(`([a-zA-Z]+)(\d+)`)
+	searchModel := re.ReplaceAllString(model, "$1 $2")
+
+	queries := []string{
+		fmt.Sprintf("%s %s %d ficha tecnica especificaciones", brand, searchModel, year),
+		fmt.Sprintf("%s %s %d specs specifications technical data", brand, searchModel, year),
+		fmt.Sprintf("%s %s %d ficha tecnica especificações", brand, searchModel, year),
+		fmt.Sprintf("%s %s %d peso altura asiento deposito tanque torque potencia", brand, searchModel, year),
+		fmt.Sprintf("%s %s %d llantas neumaticos suspension frenos transmision", brand, searchModel, year),
+	}
+
+	var allFilteredSnippets []string
+	seenSnippets := make(map[string]bool)
+
+	for _, query := range queries {
+		log.Printf("🔍 Deep Scraper executing query: %s", query)
+		snippets, err := fetchSnippetsFromDDG(query)
+		if err != nil {
+			log.Printf("⚠️ Deep Scraper: DDG search failed for query %q: %v", query, err)
+			snippets = []string{}
+		}
+
+		var queryFiltered []string
+		for _, s := range snippets {
+			if filterFn(s) && !seenSnippets[s] {
+				seenSnippets[s] = true
+				queryFiltered = append(queryFiltered, s)
+			}
+		}
+
+		// Fallback to Yahoo if DDG returned nothing relevant for this query
+		if len(queryFiltered) == 0 {
+			log.Printf("⚠️ Deep Scraper: DDG returned 0 results for %q. Falling back to Yahoo...", query)
+			yahooSnippets, err := fetchSnippetsFromYahoo(query)
+			if err == nil {
+				for _, s := range yahooSnippets {
+					if filterFn(s) && !seenSnippets[s] {
+						seenSnippets[s] = true
+						queryFiltered = append(queryFiltered, s)
+					}
+				}
+			}
+		}
+
+		allFilteredSnippets = append(allFilteredSnippets, queryFiltered...)
+
+		// Polite delay between requests to avoid rate limits
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	log.Printf("🤖 Deep Scraper found total %d unique relevant snippets across all searches.", len(allFilteredSnippets))
+	if len(allFilteredSnippets) == 0 {
+		return &VehicleSpecs{}, nil
+	}
+
+	specs := extractSpecsWithScoring(allFilteredSnippets)
+	return &specs, nil
+}
+

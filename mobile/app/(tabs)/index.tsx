@@ -29,6 +29,7 @@ import {
   Moon,
   Pencil,
   Trash2,
+  Search,
 } from "lucide-react-native";
 import { api } from "../../utils/api";
 import { usePushNotifications } from "../../hooks/usePushNotifications";
@@ -369,23 +370,16 @@ export default function DashboardScreen() {
     if (!vehicle) return;
     setFetchingSpecs(true);
     try {
-      const response = await api.post(`vehicles/${vehicle.id}/fetch-specs`);
-      if (response.data) {
-        setVehicle(response.data);
-        // Also update in the vehicles list
-        setVehicles((prev) =>
-          prev.map((v) => (v.id === vehicle.id ? response.data : v)),
-        );
-        showAlert(
-          "Ficha Técnica",
-          "Ficha técnica actualizada correctamente usando Inteligencia Artificial.",
-        );
-      }
+      await api.post(`vehicles/${vehicle.id}/scrape`);
+      showAlert(
+        "Búsqueda Iniciada",
+        "Se ha iniciado la búsqueda exhaustiva de especificaciones en segundo plano. Desliza hacia abajo (Pull-to-refresh) en unos momentos para actualizar y visualizar los datos."
+      );
     } catch (err: any) {
       console.error("Error fetching specs:", err);
       const errMsg =
         err.response?.data?.error ||
-        "No se pudieron obtener las especificaciones de la moto. Revisa tu API key en backend/.env o inténtalo de nuevo.";
+        "No se pudo iniciar la búsqueda de especificaciones en segundo plano. Revisa tu API key en backend_go/.env o inténtalo de nuevo.";
       showAlert("Error al buscar", errMsg);
     } finally {
       setFetchingSpecs(false);
@@ -1465,6 +1459,34 @@ export default function DashboardScreen() {
                       <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 13, color: theme === 'light' ? '#002C5B' : '#FFFFFF', marginTop: 4, fontWeight: 'bold' }}>
                         {vehicle.rearSuspension || "No disponible"}
                       </Text>
+                    </View>
+
+                    {/* Botón para búsqueda profunda y edición manual */}
+                    <View style={{ width: '100%', marginTop: 8, flexDirection: 'row', gap: 10 }}>
+                      <TouchableOpacity
+                        onPress={handleFetchSpecs}
+                        disabled={fetchingSpecs}
+                        className="bg-neutral-500/10 border border-neutral-400/30 px-3 py-2.5 rounded-xl flex-row items-center justify-center flex-1"
+                      >
+                        {fetchingSpecs ? (
+                          <ActivityIndicator size="small" color={theme === 'light' ? '#1C69D4' : '#00A3E0'} style={{ marginRight: 6 }} />
+                        ) : (
+                          <Search size={12} color={theme === 'light' ? '#1C69D4' : '#00A3E0'} style={{ marginRight: 6 }} />
+                        )}
+                        <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: theme === 'light' ? '#1C69D4' : '#00A3E0' }}>
+                          {fetchingSpecs ? "Buscando..." : "Buscar especificaciones completas"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={openEditSpecsModal}
+                        className="bg-neutral-500/10 border border-neutral-400/30 px-3 py-2.5 rounded-xl flex-row items-center justify-center"
+                        style={{ width: 120 }}
+                      >
+                        <Pencil size={12} color={theme === 'light' ? '#1C69D4' : '#00A3E0'} style={{ marginRight: 6 }} />
+                        <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: theme === 'light' ? '#1C69D4' : '#00A3E0' }}>
+                          Editar Ficha
+                        </Text>
+                      </TouchableOpacity>
                     </View>
 
                   </View>
