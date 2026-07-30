@@ -1482,28 +1482,8 @@ export default function DashboardScreen() {
                     type={alert.triggerType}
                     onPress={alert.isCompleted ? undefined : () => {
                       setSelectedAlert(alert);
-                      
-                      if (alert.triggerType === "MILEAGE") {
-                        const currentOdo = vehicle.currentMileage;
-                        setLastPerformedValue(currentOdo.toString());
-                        
-                        // Calculate interval
-                        let interval = 3000;
-                        if (alert.lastPerformedValue) {
-                          const prevLast = parseInt(alert.lastPerformedValue);
-                          const prevTarget = parseInt(alert.triggerValue);
-                          if (prevTarget > prevLast) interval = prevTarget - prevLast;
-                        }
-                        setTriggerValue((currentOdo + interval).toString());
-                      } else {
-                        const todayStr = new Date().toISOString().split('T')[0];
-                        setLastPerformedValue(todayStr);
-                        
-                        // Default 1 year interval
-                        const nextYear = new Date();
-                        nextYear.setFullYear(nextYear.getFullYear() + 1);
-                        setTriggerValue(nextYear.toISOString().split('T')[0]);
-                      }
+                      setLastPerformedValue(alert.lastPerformedValue || "");
+                      setTriggerValue(alert.triggerValue || "");
                       setMaintenanceModalVisible(true);
                     }}
                   />
