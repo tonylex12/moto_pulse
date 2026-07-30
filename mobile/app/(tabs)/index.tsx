@@ -12,6 +12,7 @@ import {
   Keyboard,
   StyleSheet,
   Image,
+  RefreshControl,
 } from "react-native";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useUser, useAuth } from "@clerk/clerk-expo";
@@ -838,6 +839,17 @@ export default function DashboardScreen() {
           }}
           className="flex-1"
           keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                fetchData();
+              }}
+              tintColor={theme === 'light' ? '#1C69D4' : '#00A3E0'}
+              colors={['#1C69D4']}
+            />
+          }
         >
           {vehicle && !isRegisteringNew ? (
             // Active Dashboard View

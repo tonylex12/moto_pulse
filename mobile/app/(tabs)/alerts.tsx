@@ -515,7 +515,7 @@ export default function AlertsScreen() {
                   </View>
 
                   {/* Actions */}
-                  <View style={{ flexDirection: 'row', gap: 8, marginLeft: 16 }}>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, marginLeft: 16 }}>
                     {!alert.isCompleted && (
                       <TouchableOpacity
                         onPress={() => {
