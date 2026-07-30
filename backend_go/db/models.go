@@ -45,6 +45,21 @@ func (j *JSON) Scan(value interface{}) error {
 	return nil
 }
 
+func (j JSON) MarshalJSON() ([]byte, error) {
+	if len(j) == 0 {
+		return []byte("null"), nil
+	}
+	return j, nil
+}
+
+func (j *JSON) UnmarshalJSON(data []byte) error {
+	if j == nil {
+		return errors.New("json.RawMessage: UnmarshalJSON on nil pointer")
+	}
+	*j = append((*j)[0:0], data...)
+	return nil
+}
+
 // User model mapping to the "User" table
 type User struct {
 	ClerkID       string    `gorm:"primaryKey;column:clerkId;not null" json:"clerkId"`
