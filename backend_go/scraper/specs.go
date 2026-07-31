@@ -699,16 +699,29 @@ func extractSpecsWithScoring(snippetsList []string) VehicleSpecs {
 
 	// 10 & 11. SUSPENSIONS
 	var suspensionCandidates []contextItem
-	suspRegex := regexp.MustCompile(`(?i)(horquilla\s*(?:telescopica|invertida|telescópica)?|barras\s*invertidas|amortiguador\s*delantero|suspension\s*delantera|suspensión\s*delantera|monoshock|monoamortiguador|doble\s*amortiguador|suspension\s*trasera|suspensión\s*trasera)`)
+	suspRegex := regexp.MustCompile(`(?i)(suspensión\s+delantera|suspension\s+delantera|horquilla\s+telescópica|horquilla\s+telescopica|horquilla\s+invertida|horquilla|suspensión\s+trasera|suspension\s+trasera|monoshock|mono\s+shock|mono-shock|monoamortiguador|amortiguador\s+trasero|amortiguadores\s+traseros|doble\s+amortiguador)\s*([^,\.;\n]*)`)
+	seenSusp := make(map[string]bool)
+
 	for _, snippet := range snippetsList {
 		matches := suspRegex.FindAllStringSubmatchIndex(snippet, -1)
 		for _, loc := range matches {
-			localCtx := getLocalContext(snippet, loc[0], loc[1], 50)
-			suspensionCandidates = append(suspensionCandidates, contextItem{
-				value:    snippet[loc[0]:loc[1]],
-				index:    loc[0],
-				localCtx: localCtx,
-			})
+			if len(loc) >= 6 {
+				keyword := snippet[loc[2]:loc[3]]
+				remainder := snippet[loc[4]:loc[5]]
+				cleaned := cleanDescription(keyword, remainder)
+				
+				if seenSusp[strings.ToLower(cleaned)] {
+					continue
+				}
+				seenSusp[strings.ToLower(cleaned)] = true
+
+				localCtx := getLocalContext(snippet, loc[0], loc[1], 50)
+				suspensionCandidates = append(suspensionCandidates, contextItem{
+					value:    cleaned,
+					index:    loc[0],
+					localCtx: localCtx,
+				})
+			}
 		}
 	}
 	if len(suspensionCandidates) > 0 {
@@ -717,21 +730,37 @@ func extractSpecsWithScoring(snippetsList []string) VehicleSpecs {
 
 		for _, c := range suspensionCandidates {
 			lowerVal := strings.ToLower(c.value)
+			
+			hasFrontIndicators := strings.Contains(lowerVal, "horquilla") || strings.Contains(lowerVal, "barras") || strings.Contains(lowerVal, "delantera") || strings.Contains(lowerVal, "front")
+			hasRearIndicators := strings.Contains(lowerVal, "monoshock") || strings.Contains(lowerVal, "mono shock") || strings.Contains(lowerVal, "mono-shock") || strings.Contains(lowerVal, "monoamortiguador") || strings.Contains(lowerVal, "pro-link") || strings.Contains(lowerVal, "pro link") || strings.Contains(lowerVal, "trasera") || strings.Contains(lowerVal, "trasero") || strings.Contains(lowerVal, "rear") || strings.Contains(lowerVal, "doble amortiguador")
+
 			fScore := 0
-			if strings.Contains(lowerVal, "horquilla") || strings.Contains(lowerVal, "barras") || strings.Contains(lowerVal, "delantera") || strings.Contains(c.localCtx, "delantero") || strings.Contains(c.localCtx, "delantera") || strings.Contains(c.localCtx, "front") {
-				fScore += 20
-			}
-			if strings.Contains(lowerVal, "monoshock") || strings.Contains(lowerVal, "trasera") || strings.Contains(c.localCtx, "trasero") || strings.Contains(c.localCtx, "trasera") || strings.Contains(c.localCtx, "rear") {
-				fScore -= 20
+			if hasFrontIndicators && !hasRearIndicators {
+				fScore += 100
+			} else if hasRearIndicators && !hasFrontIndicators {
+				fScore -= 100
+			} else {
+				if strings.Contains(c.localCtx, "delantero") || strings.Contains(c.localCtx, "delantera") || strings.Contains(c.localCtx, "front") {
+					fScore += 20
+				}
+				if strings.Contains(c.localCtx, "trasero") || strings.Contains(c.localCtx, "trasera") || strings.Contains(c.localCtx, "rear") {
+					fScore -= 20
+				}
 			}
 			frontSusp = append(frontSusp, candidate{value: c.value, score: fScore})
 
 			rScore := 0
-			if strings.Contains(lowerVal, "monoshock") || strings.Contains(lowerVal, "monoamortiguador") || strings.Contains(lowerVal, "trasera") || strings.Contains(c.localCtx, "trasero") || strings.Contains(c.localCtx, "trasera") || strings.Contains(c.localCtx, "rear") {
-				rScore += 20
-			}
-			if strings.Contains(lowerVal, "horquilla") || strings.Contains(lowerVal, "delantera") || strings.Contains(c.localCtx, "delantero") || strings.Contains(c.localCtx, "delantera") || strings.Contains(c.localCtx, "front") {
-				rScore -= 20
+			if hasRearIndicators && !hasFrontIndicators {
+				rScore += 100
+			} else if hasFrontIndicators && !hasRearIndicators {
+				rScore -= 100
+			} else {
+				if strings.Contains(c.localCtx, "trasero") || strings.Contains(c.localCtx, "trasera") || strings.Contains(c.localCtx, "rear") {
+					rScore += 20
+				}
+				if strings.Contains(c.localCtx, "delantero") || strings.Contains(c.localCtx, "delantera") || strings.Contains(c.localCtx, "front") {
+					rScore -= 20
+				}
 			}
 			rearSusp = append(rearSusp, candidate{value: c.value, score: rScore})
 		}
@@ -739,10 +768,10 @@ func extractSpecsWithScoring(snippetsList []string) VehicleSpecs {
 		sort.Slice(frontSusp, func(i, j int) bool { return frontSusp[i].score > frontSusp[j].score })
 		sort.Slice(rearSusp, func(i, j int) bool { return rearSusp[i].score > rearSusp[j].score })
 
-		if frontSusp[0].score >= 0 {
+		if len(frontSusp) > 0 && frontSusp[0].score >= 0 {
 			specs.FrontSuspension = &frontSusp[0].value
 		}
-		if rearSusp[0].score >= 0 {
+		if len(rearSusp) > 0 && rearSusp[0].score >= 0 {
 			specs.RearSuspension = &rearSusp[0].value
 		}
 	}
@@ -949,10 +978,10 @@ func FetchVehicleSpecsDeep(brand, model string, year int) (*VehicleSpecs, error)
 
 	queries := []string{
 		fmt.Sprintf("%s %s %d ficha tecnica especificaciones", brand, searchModel, year),
-		fmt.Sprintf("%s %s %d specs specifications technical data", brand, searchModel, year),
-		fmt.Sprintf("%s %s %d ficha tecnica especificações", brand, searchModel, year),
 		fmt.Sprintf("%s %s %d peso altura asiento deposito tanque torque potencia", brand, searchModel, year),
 		fmt.Sprintf("%s %s %d llantas neumaticos suspension frenos transmision", brand, searchModel, year),
+		fmt.Sprintf("%s %s %d specs specifications technical data", brand, searchModel, year),
+		fmt.Sprintf("%s %s %d ficha tecnica especificações", brand, searchModel, year),
 	}
 
 	var allFilteredSnippets []string
@@ -991,7 +1020,7 @@ func FetchVehicleSpecsDeep(brand, model string, year int) (*VehicleSpecs, error)
 		allFilteredSnippets = append(allFilteredSnippets, queryFiltered...)
 
 		// Polite delay between requests to avoid rate limits
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(1200 * time.Millisecond)
 	}
 
 	log.Printf("🤖 Deep Scraper found total %d unique relevant snippets across all searches.", len(allFilteredSnippets))
@@ -1001,5 +1030,50 @@ func FetchVehicleSpecsDeep(brand, model string, year int) (*VehicleSpecs, error)
 
 	specs := extractSpecsWithScoring(allFilteredSnippets)
 	return &specs, nil
+}
+
+func cleanDescription(keyword, remainder string) string {
+	val := strings.TrimSpace(remainder)
+	// Remove leading punctuation
+	val = strings.TrimLeft(val, ":-=_ ")
+	val = strings.TrimSpace(val)
+
+	// Remove leading prepositions/verbs
+	lower := strings.ToLower(val)
+	if strings.HasPrefix(lower, "es ") {
+		val = val[3:]
+	} else if strings.HasPrefix(lower, "con ") {
+		val = val[4:]
+	} else if strings.HasPrefix(lower, "de ") {
+		val = val[3:]
+	} else if strings.HasPrefix(lower, "un ") {
+		val = val[3:]
+	} else if strings.HasPrefix(lower, "una ") {
+		val = val[4:]
+	}
+	val = strings.TrimSpace(val)
+
+	if val == "" {
+		// Capitalize first letter of keyword
+		full := keyword
+		if len(full) > 0 {
+			runes := []rune(full)
+			runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
+			full = string(runes)
+		}
+		return full
+	}
+
+	// Capitalize first letter of keyword + remainder
+	full := keyword + " " + val
+
+	// Capitalize first letter of full
+	if len(full) > 0 {
+		runes := []rune(full)
+		runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
+		full = string(runes)
+	}
+
+	return full
 }
 
