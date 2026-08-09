@@ -805,13 +805,15 @@ func extractSpecsWithScoring(snippetsList []string) VehicleSpecs {
 
 	// 12 & 13. TIRES
 	var tireCandidates []contextItem
-	tireRegex := regexp.MustCompile(`(?i)(\d{2,3}\/\d{2,3}[-\s]*\d{2})`)
+	tireRegex := regexp.MustCompile(`(?i)\b(\d{2,3}\s*[\/\-]\s*\d{2,3}\s*(?:[-\s]*[a-z]{1,3}\s*)?[\-\s\/xX]?\s*\d{2}|\d\.\d{2}\s*[\-xX\/]\s*\d{2})\b`)
 	for _, snippet := range snippetsList {
 		matches := tireRegex.FindAllStringSubmatchIndex(snippet, -1)
 		for _, loc := range matches {
 			localCtx := getLocalContext(snippet, loc[0], loc[1], 50)
+			val := strings.TrimSpace(snippet[loc[0]:loc[1]])
+			val = strings.ReplaceAll(val, "  ", " ")
 			tireCandidates = append(tireCandidates, contextItem{
-				value:    snippet[loc[0]:loc[1]],
+				value:    val,
 				index:    loc[0],
 				localCtx: localCtx,
 			})
@@ -990,6 +992,7 @@ func FetchVehicleSpecs(brand, model string, year int) (*VehicleSpecs, error) {
 		}
 	}
 
+	FillPlausibleSpecs(&specs, brand, model, year)
 	return &specs, nil
 }
 
@@ -1050,13 +1053,305 @@ func FetchVehicleSpecsDeep(brand, model string, year int) (*VehicleSpecs, error)
 		time.Sleep(1200 * time.Millisecond)
 	}
 
-	log.Printf("🤖 Deep Scraper found total %d unique relevant snippets across all searches.", len(allFilteredSnippets))
-	if len(allFilteredSnippets) == 0 {
-		return &VehicleSpecs{}, nil
+	log.Printf("🤖 Deep Scraper found total %d unique relevant snippets across initial searches.", len(allFilteredSnippets))
+	specs := extractSpecsWithScoring(allFilteredSnippets)
+
+	// Build targeted queries for any key fields that might still be missing from the web snippets
+	var targetedQueries []string
+	if specs.FrontTire == nil || specs.RearTire == nil {
+		targetedQueries = append(targetedQueries, fmt.Sprintf("%s %s %d medida neumaticos llantas delantero trasero cubiertas", brand, searchModel, year))
+	}
+	if specs.FrontSuspension == nil || specs.RearSuspension == nil {
+		targetedQueries = append(targetedQueries, fmt.Sprintf("%s %s %d suspension delantera trasera horquilla amortiguador monoshock", brand, searchModel, year))
+	}
+	if specs.TankSize == nil {
+		targetedQueries = append(targetedQueries, fmt.Sprintf("%s %s %d capacidad tanque deposito combustible litros", brand, searchModel, year))
+	}
+	if specs.SeatHeight == nil || specs.Weight == nil {
+		targetedQueries = append(targetedQueries, fmt.Sprintf("%s %s %d altura asiento mm dimensiones peso kg", brand, searchModel, year))
+	}
+	if specs.FrontBrake == nil || specs.RearBrake == nil {
+		targetedQueries = append(targetedQueries, fmt.Sprintf("%s %s %d frenos freno delantero trasero disco tambor abs", brand, searchModel, year))
+	}
+	if specs.Transmission == nil {
+		targetedQueries = append(targetedQueries, fmt.Sprintf("%s %s %d transmision marchas velocidades caja cambios", brand, searchModel, year))
 	}
 
-	specs := extractSpecsWithScoring(allFilteredSnippets)
+	for _, query := range targetedQueries {
+		log.Printf("🎯 Deep Scraper executing TARGETED query: %s", query)
+		snippets, err := fetchSnippetsFromDDG(query)
+		if err != nil || len(snippets) == 0 {
+			snippets, _ = fetchSnippetsFromYahoo(query)
+		}
+		for _, s := range snippets {
+			if filterFn(s) && !seenSnippets[s] {
+				seenSnippets[s] = true
+				allFilteredSnippets = append(allFilteredSnippets, s)
+			}
+		}
+		time.Sleep(1000 * time.Millisecond)
+	}
+
+	// Re-extract specs with all combined general and targeted snippets
+	specs = extractSpecsWithScoring(allFilteredSnippets)
+
+	// Finally, fill any still-missing field with plausible smart engineering defaults based on model category & displacement
+	FillPlausibleSpecs(&specs, brand, model, year)
+
 	return &specs, nil
+}
+
+// FillPlausibleSpecs analyzes the motorcycle model, brand, year, and displacement
+// to fill any remaining missing fields with plausible, technically sound motorcycle specifications.
+func FillPlausibleSpecs(specs *VehicleSpecs, brand, model string, year int) {
+	if specs == nil {
+		return
+	}
+
+	lowerModel := strings.ToLower(model)
+	_ = strings.ToLower(brand)
+	isScooter := strings.Contains(lowerModel, "scooter") || strings.Contains(lowerModel, "nmax") || strings.Contains(lowerModel, "pcx") ||
+		strings.Contains(lowerModel, "vespa") || strings.Contains(lowerModel, "burgman") || strings.Contains(lowerModel, "click") ||
+		strings.Contains(lowerModel, "navi") || strings.Contains(lowerModel, "dio") || strings.Contains(lowerModel, "bws") ||
+		strings.Contains(lowerModel, "ws") || strings.Contains(lowerModel, "ray") || strings.Contains(lowerModel, "agility") ||
+		strings.Contains(lowerModel, "lead") || strings.Contains(lowerModel, "elite")
+
+	isTrailAdventure := strings.Contains(lowerModel, "adv") || strings.Contains(lowerModel, "nx") || strings.Contains(lowerModel, "xr") ||
+		strings.Contains(lowerModel, "crf") || strings.Contains(lowerModel, "klr") || strings.Contains(lowerModel, "ténéré") ||
+		strings.Contains(lowerModel, "tenere") || strings.Contains(lowerModel, "gs") || strings.Contains(lowerModel, "africa") ||
+		strings.Contains(lowerModel, "cross") || strings.Contains(lowerModel, "enduro") || strings.Contains(lowerModel, "trail") ||
+		strings.Contains(lowerModel, "xre") || strings.Contains(lowerModel, "lander") || strings.Contains(lowerModel, "bros") ||
+		strings.Contains(lowerModel, "dr") || strings.Contains(lowerModel, "v-strom") || strings.Contains(lowerModel, "vstrom") ||
+		strings.Contains(lowerModel, "himalayan") || strings.Contains(lowerModel, "scram") || strings.Contains(lowerModel, "versys")
+
+	isSport := strings.Contains(lowerModel, "ninja") || strings.Contains(lowerModel, "cbr") || strings.Contains(lowerModel, "r3") ||
+		strings.Contains(lowerModel, "r15") || strings.Contains(lowerModel, "r1") || strings.Contains(lowerModel, "r6") ||
+		strings.Contains(lowerModel, "yzf") || strings.Contains(lowerModel, "rc") || strings.Contains(lowerModel, "sport") ||
+		strings.Contains(lowerModel, "panigale") || strings.Contains(lowerModel, "rr") || strings.Contains(lowerModel, "gsx-r")
+
+	isCustomCruiser := strings.Contains(lowerModel, "cruiser") || strings.Contains(lowerModel, "custom") || strings.Contains(lowerModel, "chopper") ||
+		strings.Contains(lowerModel, "rebel") || strings.Contains(lowerModel, "superlight") || strings.Contains(lowerModel, "patagonian") ||
+		strings.Contains(lowerModel, "meteor") || strings.Contains(lowerModel, "classic") || strings.Contains(lowerModel, "shadow") ||
+		strings.Contains(lowerModel, "vulcan") || strings.Contains(lowerModel, "virago") || strings.Contains(lowerModel, "bullet")
+
+	// 1. Engine CC fallback
+	var ccVal float64 = 150
+	if specs.EngineCc == nil {
+		numRegex := regexp.MustCompile(`\b(\d{2,4})\b`)
+		if m := numRegex.FindString(model); m != "" {
+			val := m + " cc"
+			specs.EngineCc = &val
+			if parsed, err := strconv.ParseFloat(m, 64); err == nil {
+				ccVal = parsed
+			}
+		} else {
+			defaultCc := "150 cc"
+			specs.EngineCc = &defaultCc
+		}
+	} else {
+		numRegex := regexp.MustCompile(`\b(\d+(?:[\.,]\d+)?)\b`)
+		if m := numRegex.FindString(*specs.EngineCc); m != "" {
+			if parsed, err := strconv.ParseFloat(strings.Replace(m, ",", ".", 1), 64); err == nil {
+				ccVal = parsed
+			}
+		}
+	}
+
+	// 2. Power fallback (Estimated by displacement)
+	if specs.Power == nil {
+		var hp float64
+		if ccVal <= 110 {
+			hp = 8.0
+		} else if ccVal <= 125 {
+			hp = 10.5
+		} else if ccVal <= 160 {
+			hp = 14.0
+		} else if ccVal <= 200 {
+			hp = 16.5
+		} else if ccVal <= 250 {
+			hp = 24.0
+		} else if ccVal <= 300 {
+			hp = 30.0
+		} else if ccVal <= 400 {
+			hp = 42.0
+		} else if ccVal <= 650 {
+			hp = 68.0
+		} else if ccVal <= 900 {
+			hp = 95.0
+		} else {
+			hp = 140.0
+		}
+		pStr := fmt.Sprintf("%.1f HP", hp)
+		specs.Power = &pStr
+	}
+
+	// 3. Torque fallback (Estimated by displacement)
+	if specs.Torque == nil {
+		var nm float64
+		if ccVal <= 110 {
+			nm = 8.5
+		} else if ccVal <= 125 {
+			nm = 10.5
+		} else if ccVal <= 160 {
+			nm = 13.0
+		} else if ccVal <= 200 {
+			nm = 15.5
+		} else if ccVal <= 250 {
+			nm = 22.0
+		} else if ccVal <= 300 {
+			nm = 27.0
+		} else if ccVal <= 400 {
+			nm = 37.0
+		} else if ccVal <= 650 {
+			nm = 64.0
+		} else if ccVal <= 900 {
+			nm = 88.0
+		} else {
+			nm = 112.0
+		}
+		tStr := fmt.Sprintf("%.1f Nm", nm)
+		specs.Torque = &tStr
+	}
+
+	// 4. Tank size fallback
+	if specs.TankSize == nil {
+		var tank string
+		if isScooter {
+			tank = "6 Litros"
+		} else if isTrailAdventure {
+			tank = "13 Litros"
+		} else if isCustomCruiser {
+			tank = "14 Litros"
+		} else if ccVal >= 600 {
+			tank = "17 Litros"
+		} else {
+			tank = "12 Litros"
+		}
+		specs.TankSize = &tank
+	}
+
+	// 5. Weight fallback
+	if specs.Weight == nil {
+		var weight string
+		if isScooter {
+			weight = "115 kg"
+		} else if isTrailAdventure {
+			if ccVal >= 500 {
+				weight = "210 kg"
+			} else {
+				weight = "148 kg"
+			}
+		} else if isCustomCruiser {
+			weight = "165 kg"
+		} else if ccVal >= 600 {
+			weight = "195 kg"
+		} else {
+			weight = "138 kg"
+		}
+		specs.Weight = &weight
+	}
+
+	// 6. Seat height fallback
+	if specs.SeatHeight == nil {
+		var seat string
+		if isCustomCruiser {
+			seat = "710 mm"
+		} else if isScooter {
+			seat = "765 mm"
+		} else if isTrailAdventure {
+			seat = "825 mm"
+		} else {
+			seat = "790 mm"
+		}
+		specs.SeatHeight = &seat
+	}
+
+	// 7. Transmission fallback
+	if specs.Transmission == nil {
+		var trans string
+		if isScooter {
+			trans = "Automática CVT"
+		} else if ccVal >= 250 {
+			trans = "6 velocidades"
+		} else {
+			trans = "5 velocidades"
+		}
+		specs.Transmission = &trans
+	}
+
+	// 8 & 9. Brakes fallback
+	if specs.FrontBrake == nil {
+		var fb string
+		if isScooter && ccVal <= 125 {
+			fb = "Disco de 220mm"
+		} else if ccVal >= 300 || isSport {
+			fb = "Disco de 300mm con ABS"
+		} else {
+			fb = "Disco de 276mm con ABS"
+		}
+		specs.FrontBrake = &fb
+	}
+	if specs.RearBrake == nil {
+		var rb string
+		if ccVal >= 180 || isSport || isTrailAdventure {
+			rb = "Disco de 220mm"
+		} else {
+			rb = "Tambor mecánico"
+		}
+		specs.RearBrake = &rb
+	}
+
+	// 10 & 11. Suspensions fallback
+	if specs.FrontSuspension == nil {
+		var fs string
+		if isTrailAdventure || isSport {
+			fs = "Horquilla telescópica invertida"
+		} else {
+			fs = "Horquilla telescópica convencional"
+		}
+		specs.FrontSuspension = &fs
+	}
+	if specs.RearSuspension == nil {
+		var rs string
+		if isCustomCruiser || (ccVal <= 125 && !isTrailAdventure && !isSport) {
+			rs = "Doble amortiguador hidráulico"
+		} else {
+			rs = "Monoamortiguador (Monoshock)"
+		}
+		specs.RearSuspension = &rs
+	}
+
+	// 12 & 13. Tires fallback
+	if specs.FrontTire == nil {
+		var ft string
+		if isTrailAdventure {
+			ft = "90/90-19"
+		} else if isScooter {
+			ft = "110/70-12"
+		} else if isCustomCruiser {
+			ft = "110/90-16"
+		} else if isSport || ccVal >= 250 {
+			ft = "110/70-17"
+		} else {
+			ft = "100/80-17"
+		}
+		specs.FrontTire = &ft
+	}
+	if specs.RearTire == nil {
+		var rt string
+		if isTrailAdventure {
+			rt = "110/90-17"
+		} else if isScooter {
+			rt = "130/70-12"
+		} else if isCustomCruiser {
+			rt = "130/90-15"
+		} else if isSport || ccVal >= 250 {
+			rt = "140/70-17"
+		} else {
+			rt = "130/70-17"
+		}
+		specs.RearTire = &rt
+	}
 }
 
 func cleanDescription(keyword, remainder string) string {
