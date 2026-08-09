@@ -508,55 +508,54 @@ func RunDeepSpecsAndImageLookup(vehicleID string, brand, model string, year int)
 	}
 
 	if specs != nil {
-		// Selectively update fields that are currently nil or empty
-		if specs.TankSize != nil && (currentVehicle.TankSize == nil || *currentVehicle.TankSize == "") {
+		if specs.TankSize != nil {
 			updates["tankSize"] = *specs.TankSize
 		}
-		if specs.FrontBrake != nil && (currentVehicle.FrontBrake == nil || *currentVehicle.FrontBrake == "") {
+		if specs.FrontBrake != nil {
 			updates["frontBrake"] = *specs.FrontBrake
 		}
-		if specs.RearBrake != nil && (currentVehicle.RearBrake == nil || *currentVehicle.RearBrake == "") {
+		if specs.RearBrake != nil {
 			updates["rearBrake"] = *specs.RearBrake
 		}
-		if specs.FrontSuspension != nil && (currentVehicle.FrontSuspension == nil || *currentVehicle.FrontSuspension == "") {
+		if specs.FrontSuspension != nil {
 			updates["frontSuspension"] = *specs.FrontSuspension
 		}
-		if specs.RearSuspension != nil && (currentVehicle.RearSuspension == nil || *currentVehicle.RearSuspension == "") {
+		if specs.RearSuspension != nil {
 			updates["rearSuspension"] = *specs.RearSuspension
 		}
-		if specs.FrontTire != nil && (currentVehicle.FrontTire == nil || *currentVehicle.FrontTire == "") {
+		if specs.FrontTire != nil {
 			updates["frontTire"] = *specs.FrontTire
 		}
-		if specs.RearTire != nil && (currentVehicle.RearTire == nil || *currentVehicle.RearTire == "") {
+		if specs.RearTire != nil {
 			updates["rearTire"] = *specs.RearTire
 		}
-		if specs.EngineCc != nil && (currentVehicle.EngineCc == nil || *currentVehicle.EngineCc == "") {
+		if specs.EngineCc != nil {
 			updates["engineCc"] = *specs.EngineCc
 		}
-		if specs.Power != nil && (currentVehicle.Power == nil || *currentVehicle.Power == "") {
+		if specs.Power != nil {
 			updates["power"] = *specs.Power
 		}
-		if specs.Torque != nil && (currentVehicle.Torque == nil || *currentVehicle.Torque == "") {
+		if specs.Torque != nil {
 			updates["torque"] = *specs.Torque
 		}
-		if specs.Transmission != nil && (currentVehicle.Transmission == nil || *currentVehicle.Transmission == "") {
+		if specs.Transmission != nil {
 			updates["transmission"] = *specs.Transmission
 		}
-		if specs.Weight != nil && (currentVehicle.Weight == nil || *currentVehicle.Weight == "") {
+		if specs.Weight != nil {
 			updates["weight"] = *specs.Weight
 		}
-		if specs.SeatHeight != nil && (currentVehicle.SeatHeight == nil || *currentVehicle.SeatHeight == "") {
+		if specs.SeatHeight != nil {
 			updates["seatHeight"] = *specs.SeatHeight
 		}
 		updates["specSource"] = "Búsqueda Web"
 	}
 
-	if len(updates) > 1 || (len(updates) == 1 && updates["specSource"] == nil) {
+	if len(updates) > 0 {
 		err := db.DB.Model(&db.Vehicle{}).Where("id = ?", vehicleID).Updates(updates).Error
 		if err != nil {
 			log.Printf("❌ Failed to update vehicle %s in deep background: %v", vehicleID, err)
 		} else {
-			log.Printf("✅ Deep background lookup completed and updated vehicle ID %s.", vehicleID)
+			log.Printf("✅ Deep background lookup completed and updated vehicle ID %s with %d fields.", vehicleID, len(updates))
 		}
 	}
 }

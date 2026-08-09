@@ -305,10 +305,12 @@ func extractSpecsWithScoring(snippetsList []string) VehicleSpecs {
 
 	// 1. TANK SIZE
 	var tankCandidates []candidate
-	tankRegex := regexp.MustCompile(`(?i)(\b\d+(?:[\.,]\d+)?)\s*(?:litros|litro|lts|l|gal|galones)\b`)
+	tankRegex1 := regexp.MustCompile(`(?i)(\b\d+(?:[\.,]\d+)?)\s*(?:litros|litro|lts|l|gal|galones)\b`)
+	tankRegex2 := regexp.MustCompile(`(?i)(?:tanque|deposito|depósito|combustible|capacidad)\s*(?:de)?\s*(?:combustible)?\s*[:=\-]?\s*(\d+(?:[\.,]\d+)?)\s*(?:litros|litro|lts|l|gal|galones)?\b`)
+
 	for _, snippet := range snippetsList {
-		matches := tankRegex.FindAllStringSubmatchIndex(snippet, -1)
-		for _, loc := range matches {
+		matches1 := tankRegex1.FindAllStringSubmatchIndex(snippet, -1)
+		for _, loc := range matches1 {
 			if len(loc) < 4 {
 				continue
 			}
@@ -360,12 +362,31 @@ func extractSpecsWithScoring(snippetsList []string) VehicleSpecs {
 			}
 			tankCandidates = append(tankCandidates, candidate{value: displayVal, score: score})
 		}
+
+		matches2 := tankRegex2.FindAllStringSubmatchIndex(snippet, -1)
+		for _, loc := range matches2 {
+			if len(loc) < 4 {
+				continue
+			}
+			valStr := strings.Replace(snippet[loc[2]:loc[3]], ",", ".", 1)
+			val, err := strconv.ParseFloat(valStr, 64)
+			if err != nil {
+				continue
+			}
+			if val < 3 || val > 30 {
+				continue
+			}
+			displayVal := fmt.Sprintf("%s Litros", valStr)
+			tankCandidates = append(tankCandidates, candidate{value: displayVal, score: 35})
+		}
 	}
 	if len(tankCandidates) > 0 {
 		sort.Slice(tankCandidates, func(i, j int) bool {
 			return tankCandidates[i].score > tankCandidates[j].score
 		})
-		specs.TankSize = &tankCandidates[0].value
+		if tankCandidates[0].score > 0 {
+			specs.TankSize = &tankCandidates[0].value
+		}
 	}
 
 	// 2. TORQUE
@@ -699,15 +720,18 @@ func extractSpecsWithScoring(snippetsList []string) VehicleSpecs {
 
 	// 10 & 11. SUSPENSIONS
 	var suspensionCandidates []contextItem
-	suspRegex := regexp.MustCompile(`(?i)(suspensión\s+delantera|suspension\s+delantera|horquilla\s+telescópica|horquilla\s+telescopica|horquilla\s+invertida|horquilla|suspensión\s+trasera|suspension\s+trasera|monoshock|mono\s+shock|mono-shock|monoamortiguador|amortiguador\s+trasero|amortiguadores\s+traseros|doble\s+amortiguador)\s*([^,\.;\n]*)`)
+	suspRegex := regexp.MustCompile(`(?i)(suspensión\s+delantera|suspension\s+delantera|horquilla\s+telescópica|horquilla\s+telescopica|horquilla\s+invertida|horquilla|barras\s+invertidas|suspensión\s+trasera|suspension\s+trasera|suspensión\s+posterior|suspension\s+posterior|monoshock|mono\s+shock|mono-shock|monoamortiguador|amortiguador\s+trasero|amortiguadores\s+traseros|doble\s+amortiguador|basculante)(?:[:=\s]+([a-záéíóúñ0-9\(\)\-_\/]+(?:\s+[a-záéíóúñ0-9\(\)\-_\/]+){0,5}))?`)
 	seenSusp := make(map[string]bool)
 
 	for _, snippet := range snippetsList {
 		matches := suspRegex.FindAllStringSubmatchIndex(snippet, -1)
 		for _, loc := range matches {
-			if len(loc) >= 6 {
+			if len(loc) >= 4 {
 				keyword := snippet[loc[2]:loc[3]]
-				remainder := snippet[loc[4]:loc[5]]
+				remainder := ""
+				if len(loc) >= 6 && loc[4] != -1 && loc[5] != -1 {
+					remainder = snippet[loc[4]:loc[5]]
+				}
 				cleaned := cleanDescription(keyword, remainder)
 				
 				if seenSusp[strings.ToLower(cleaned)] {
@@ -730,9 +754,12 @@ func extractSpecsWithScoring(snippetsList []string) VehicleSpecs {
 
 		for _, c := range suspensionCandidates {
 			lowerVal := strings.ToLower(c.value)
+			if lowerVal == "delantera" || lowerVal == "delantero" || lowerVal == "trasera" || lowerVal == "trasero" || lowerVal == "posterior" || len(lowerVal) < 4 {
+				continue
+			}
 			
 			hasFrontIndicators := strings.Contains(lowerVal, "horquilla") || strings.Contains(lowerVal, "barras") || strings.Contains(lowerVal, "delantera") || strings.Contains(lowerVal, "front")
-			hasRearIndicators := strings.Contains(lowerVal, "monoshock") || strings.Contains(lowerVal, "mono shock") || strings.Contains(lowerVal, "mono-shock") || strings.Contains(lowerVal, "monoamortiguador") || strings.Contains(lowerVal, "pro-link") || strings.Contains(lowerVal, "pro link") || strings.Contains(lowerVal, "trasera") || strings.Contains(lowerVal, "trasero") || strings.Contains(lowerVal, "rear") || strings.Contains(lowerVal, "doble amortiguador")
+			hasRearIndicators := strings.Contains(lowerVal, "monoshock") || strings.Contains(lowerVal, "mono shock") || strings.Contains(lowerVal, "mono-shock") || strings.Contains(lowerVal, "monoamortiguador") || strings.Contains(lowerVal, "pro-link") || strings.Contains(lowerVal, "pro link") || strings.Contains(lowerVal, "trasera") || strings.Contains(lowerVal, "trasero") || strings.Contains(lowerVal, "posterior") || strings.Contains(lowerVal, "rear") || strings.Contains(lowerVal, "doble amortiguador") || strings.Contains(lowerVal, "basculante")
 
 			fScore := 0
 			if hasFrontIndicators && !hasRearIndicators {
@@ -755,7 +782,7 @@ func extractSpecsWithScoring(snippetsList []string) VehicleSpecs {
 			} else if hasFrontIndicators && !hasRearIndicators {
 				rScore -= 100
 			} else {
-				if strings.Contains(c.localCtx, "trasero") || strings.Contains(c.localCtx, "trasera") || strings.Contains(c.localCtx, "rear") {
+				if strings.Contains(c.localCtx, "trasero") || strings.Contains(c.localCtx, "trasera") || strings.Contains(c.localCtx, "posterior") || strings.Contains(c.localCtx, "rear") {
 					rScore += 20
 				}
 				if strings.Contains(c.localCtx, "delantero") || strings.Contains(c.localCtx, "delantera") || strings.Contains(c.localCtx, "front") {
@@ -768,10 +795,10 @@ func extractSpecsWithScoring(snippetsList []string) VehicleSpecs {
 		sort.Slice(frontSusp, func(i, j int) bool { return frontSusp[i].score > frontSusp[j].score })
 		sort.Slice(rearSusp, func(i, j int) bool { return rearSusp[i].score > rearSusp[j].score })
 
-		if len(frontSusp) > 0 && frontSusp[0].score >= 0 {
+		if len(frontSusp) > 0 && frontSusp[0].score > 0 {
 			specs.FrontSuspension = &frontSusp[0].value
 		}
-		if len(rearSusp) > 0 && rearSusp[0].score >= 0 {
+		if len(rearSusp) > 0 && rearSusp[0].score > 0 {
 			specs.RearSuspension = &rearSusp[0].value
 		}
 	}
@@ -1034,6 +1061,16 @@ func FetchVehicleSpecsDeep(brand, model string, year int) (*VehicleSpecs, error)
 
 func cleanDescription(keyword, remainder string) string {
 	val := strings.TrimSpace(remainder)
+	// Stop at any other section keyword if present in remainder
+	cutKeywords := []string{"suspensión", "suspension", "freno", "frenos", "neumático", "neumatico", "llanta", "chasis", "motor", "transmisión", "transmision", "peso", "dimensiones", "batería", "bateria", "abs"}
+	lowerVal := strings.ToLower(val)
+	for _, kw := range cutKeywords {
+		if idx := strings.Index(lowerVal, kw); idx != -1 {
+			val = strings.TrimSpace(val[:idx])
+			lowerVal = strings.ToLower(val)
+		}
+	}
+
 	// Remove leading punctuation
 	val = strings.TrimLeft(val, ":-=_ ")
 	val = strings.TrimSpace(val)
@@ -1054,7 +1091,6 @@ func cleanDescription(keyword, remainder string) string {
 	val = strings.TrimSpace(val)
 
 	if val == "" {
-		// Capitalize first letter of keyword
 		full := keyword
 		if len(full) > 0 {
 			runes := []rune(full)
@@ -1064,10 +1100,14 @@ func cleanDescription(keyword, remainder string) string {
 		return full
 	}
 
-	// Capitalize first letter of keyword + remainder
-	full := keyword + " " + val
+	kwLower := strings.ToLower(keyword)
+	var full string
+	if strings.Contains(kwLower, "delantera") || strings.Contains(kwLower, "trasera") || strings.Contains(kwLower, "posterior") {
+		full = val
+	} else {
+		full = keyword + " " + val
+	}
 
-	// Capitalize first letter of full
 	if len(full) > 0 {
 		runes := []rune(full)
 		runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
