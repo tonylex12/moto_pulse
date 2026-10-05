@@ -100,19 +100,23 @@ func main() {
 		sub.Delete("/api/routes/{id}", handlers.DeleteRoute)
 	})
 
-	// Internal Cron: scheduler running inside Go process checking date alerts every 12 hours
+	// Retry pending date and mileage notifications every five minutes.
 	go func() {
-		ticker := time.NewTicker(12 * time.Hour)
+		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
-			handlers.CheckDateAlerts()
+			if err := handlers.CheckPendingAlerts(); err != nil {
+				log.Printf("Checking pending alerts failed: %v", err)
+			}
 		}
 	}()
 
-	// Run initial date alerts check 5 seconds after boot
+	// Recover pending notifications five seconds after boot.
 	go func() {
 		time.Sleep(5 * time.Second)
-		handlers.CheckDateAlerts()
+		if err := handlers.CheckPendingAlerts(); err != nil {
+			log.Printf("Checking pending alerts failed: %v", err)
+		}
 	}()
 
 	// Start HTTP server

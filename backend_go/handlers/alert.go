@@ -2,19 +2,16 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"backend_go/db"
 	"backend_go/middleware"
-	"backend_go/push"
 	"github.com/go-chi/chi/v5"
+	"gorm.io/gorm"
 )
 
 type CreateAlertInput struct {
@@ -155,23 +152,15 @@ func UpdateAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updates := map[string]interface{}{}
-	if input.Type != nil { updates["type"] = *input.Type }
-	if input.Title != nil { updates["title"] = *input.Title }
-	if input.TriggerType != nil { updates["triggerType"] = *input.TriggerType }
-	if input.TriggerValue != nil { updates["triggerValue"] = *input.TriggerValue }
-	if input.LastPerformedValue != nil { updates["lastPerformedValue"] = input.LastPerformedValue }
-	if input.IsCompleted != nil { updates["isCompleted"] = *input.IsCompleted }
-
-	if len(updates) > 0 {
-		if err := db.DB.Model(&alert).Updates(updates).Error; err != nil {
-			http.Error(w, `{"error":"Failed to update alert"}`, http.StatusInternalServerError)
-			return
-		}
+	err = db.DB.Transaction(func(tx *gorm.DB) error {
+		var updateErr error
+		alert, updateErr = updateMaintenanceAlert(tx, id, clerkId, input)
+		return updateErr
+	})
+	if err != nil {
+		http.Error(w, `{"error":"Failed to update alert"}`, http.StatusInternalServerError)
+		return
 	}
-
-	// Reload updated alert
-	db.DB.First(&alert, "id = ?", id)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(alert)
@@ -207,122 +196,22 @@ func DeleteAlert(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"success":true,"message":"Alert deleted"}`))
 }
 
-// CheckAndTriggerAlerts scans and dispatches push notifications for mileage-based triggers
-func CheckAndTriggerAlerts(vehicleId string, currentMileage int) {
-	var pendingAlerts []db.MaintenanceAlert
-	err := db.DB.Preload("Vehicle.User").
-		Where("\"vehicleId\" = ? AND \"triggerType\" = ? AND \"isCompleted\" = ?", vehicleId, db.TriggerMileage, false).
-		Find(&pendingAlerts).Error
-
-	if err != nil {
-		log.Printf("❌ Failed to query pending mileage alerts: %v", err)
-		return
-	}
-
-	for _, alert := range pendingAlerts {
-		targetMileage, err := strconv.Atoi(alert.TriggerValue)
-		if err != nil {
-			continue
-		}
-
-		if currentMileage >= targetMileage {
-			log.Printf("🛠️ Mileage Alert Triggered: %s for %s %s. Value: %d/%d", alert.Title, alert.Vehicle.Brand, alert.Vehicle.Model, currentMileage, targetMileage)
-
-			// Mark alert as completed to prevent duplicate notifications
-			db.DB.Model(&alert).Update("\"isCompleted\"", true)
-
-			// Send notification
-			if alert.Vehicle.User.ExpoPushToken != nil && *alert.Vehicle.User.ExpoPushToken != "" {
-				pushToken := *alert.Vehicle.User.ExpoPushToken
-				title := fmt.Sprintf("Mantenimiento: %s 🛠️", alert.Title)
-				body := fmt.Sprintf("Tu %s %s ha alcanzado los %d km. Se requiere cambiar/revisar: %s.", 
-					alert.Vehicle.Brand, alert.Vehicle.Model, currentMileage, strings.ToLower(alert.Title))
-				
-				payload := map[string]interface{}{
-					"alertId":   alert.ID,
-					"vehicleId": vehicleId,
-				}
-				push.SendPushNotification(pushToken, title, body, payload)
-			}
-		}
-	}
-}
-
-// CheckDateAlerts verifies calendar based triggers (insurance renewals, etc.)
-func CheckDateAlerts() {
-	log.Println("⏰ Running automatic date-based alerts check...")
-	today := time.Now()
-	warningWindow := today.AddDate(0, 0, 7) // 7 days in the future
-
-	var pendingAlerts []db.MaintenanceAlert
-	err := db.DB.Preload("Vehicle.User").
-		Where("\"triggerType\" = ? AND \"isCompleted\" = ?", db.TriggerDate, false).
-		Find(&pendingAlerts).Error
-
-	if err != nil {
-		log.Printf("❌ Failed to query pending date alerts: %v", err)
-		return
-	}
-
-	for _, alert := range pendingAlerts {
-		var targetDate time.Time
-		var parseErr error
-
-		targetDate, parseErr = time.Parse(time.RFC3339, alert.TriggerValue)
-		if parseErr != nil {
-			targetDate, parseErr = time.Parse("2006-01-02", alert.TriggerValue)
-		}
-
-		if parseErr != nil {
-			continue
-		}
-
-		if targetDate.Before(warningWindow) || targetDate.Equal(warningWindow) {
-			log.Printf("📋 Date Alert Triggered: %s (Deadline: %s)", alert.Title, alert.TriggerValue)
-
-			// Send notification
-			if alert.Vehicle.User.ExpoPushToken != nil && *alert.Vehicle.User.ExpoPushToken != "" {
-				pushToken := *alert.Vehicle.User.ExpoPushToken
-				daysLeft := int(math.Ceil(targetDate.Sub(today).Hours() / 24.0))
-				bikeName := fmt.Sprintf("%s %s", alert.Vehicle.Brand, alert.Vehicle.Model)
-
-				title := fmt.Sprintf("Vencimiento: %s 📋", alert.Title)
-				var body string
-
-				if daysLeft < 0 {
-					body = fmt.Sprintf("¡ATENCIÓN! \"%s\" para tu %s venció hace %d días.", alert.Title, bikeName, int(math.Abs(float64(daysLeft))))
-				} else if daysLeft == 0 {
-					body = fmt.Sprintf("¡HOY vence \"%s\" de tu %s!", alert.Title, bikeName)
-				} else {
-					body = fmt.Sprintf("Quedan %d días para el vencimiento de \"%s\" en tu %s.", daysLeft, alert.Title, bikeName)
-				}
-
-				payload := map[string]interface{}{
-					"alertId": alert.ID,
-				}
-				push.SendPushNotification(pushToken, title, body, payload)
-			}
-
-			// Mark completed after triggering once
-			db.DB.Model(&alert).Update("\"isCompleted\"", true)
-		}
-	}
-}
-
-// TriggerCronCheckAlerts exposes an endpoint for manual/external cron trigger
+// TriggerCronCheckAlerts exposes an authenticated trigger for both alert types.
 func TriggerCronCheckAlerts(w http.ResponseWriter, r *http.Request) {
 	cronSecret := os.Getenv("CRON_SECRET")
-	authHeader := r.Header.Get("Authorization")
-
-	if cronSecret != "" && authHeader != "Bearer "+cronSecret {
+	if cronSecret == "" {
+		http.Error(w, `{"error":"Cron trigger is not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+	if r.Header.Get("Authorization") != "Bearer "+cronSecret {
 		http.Error(w, `{"error":"Unauthorized cron trigger"}`, http.StatusUnauthorized)
 		return
 	}
-
-	log.Println("HTTP trigger for scheduled date-based alerts check received.")
-	CheckDateAlerts()
-
+	if err := CheckPendingAlerts(); err != nil {
+		log.Printf("Checking alerts failed: %v", err)
+		http.Error(w, `{"error":"Failed to check alerts"}`, http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"success":true,"message":"Cron alerts checked successfully"}`))
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }

@@ -167,6 +167,7 @@ type MaintenanceAlert struct {
 	TriggerValue       string      `gorm:"column:triggerValue;not null" json:"triggerValue"`
 	LastPerformedValue *string     `gorm:"column:lastPerformedValue" json:"lastPerformedValue"`
 	IsCompleted        bool        `gorm:"column:isCompleted;default:false;not null" json:"isCompleted"`
+	NotifiedAt         *time.Time  `gorm:"column:notifiedAt" json:"notifiedAt"`
 	VehicleID          string      `gorm:"column:vehicleId;not null" json:"vehicleId"`
 	Vehicle            Vehicle     `gorm:"foreignKey:VehicleID;references:ID" json:"vehicle,omitempty"`
 	CreatedAt          time.Time   `gorm:"column:createdAt;default:now();not null" json:"createdAt"`

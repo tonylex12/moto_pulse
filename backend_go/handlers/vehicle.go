@@ -370,6 +370,11 @@ func UpdateVehicle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Notify only after the mileage update has been persisted successfully.
+	if input.CurrentMileage != nil {
+		go checkVehicleAlerts(db.DB, vehicle.ID)
+	}
+
 	// Reload updated vehicle
 	db.DB.First(&vehicle, "id = ?", id)
 

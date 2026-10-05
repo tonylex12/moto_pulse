@@ -11,11 +11,11 @@ import (
 )
 
 type CreateFuelLogInput struct {
-	VehicleID string    `json:"vehicleId"`
-	Odometer  int       `json:"odometer"`
-	Liters    float64   `json:"liters"`
-	Price     float64   `json:"price"`
-	Notes     *string   `json:"notes"`
+	VehicleID string     `json:"vehicleId"`
+	Odometer  int        `json:"odometer"`
+	Liters    float64    `json:"liters"`
+	Price     float64    `json:"price"`
+	Notes     *string    `json:"notes"`
 	Date      *time.Time `json:"date"`
 }
 
@@ -90,13 +90,18 @@ func CreateFuelLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx := db.DB.Begin()
+	if tx.Error != nil {
+		http.Error(w, `{"error":"Failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
 	if err := tx.Create(&logEntry).Error; err != nil {
 		tx.Rollback()
 		http.Error(w, `{"error":"Failed to record fuel log"}`, http.StatusInternalServerError)
 		return
 	}
 
-	updatedMileage := vehicle.CurrentMileage
+	previousMileage := vehicle.CurrentMileage
+	updatedMileage := previousMileage
 	if input.Odometer > vehicle.CurrentMileage {
 		if err := tx.Model(&vehicle).Update("currentMileage", input.Odometer).Error; err != nil {
 			tx.Rollback()
@@ -105,11 +110,14 @@ func CreateFuelLog(w http.ResponseWriter, r *http.Request) {
 		}
 		updatedMileage = input.Odometer
 	}
-	tx.Commit()
+	if err := tx.Commit().Error; err != nil {
+		http.Error(w, `{"error":"Failed to commit fuel log"}`, http.StatusInternalServerError)
+		return
+	}
 
 	// If odometer was updated, trigger mileage-based alerts check in the background
-	if updatedMileage > vehicle.CurrentMileage {
-		go CheckAndTriggerAlerts(vehicle.ID, updatedMileage)
+	if updatedMileage > previousMileage {
+		go checkVehicleAlerts(db.DB, vehicle.ID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
