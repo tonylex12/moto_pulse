@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -53,7 +53,7 @@ func jwkToRSAPublicKey(jwk JWK) (*rsa.PublicKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode modulus: %w", err)
 	}
-	
+
 	eBytes, err := base64.RawURLEncoding.DecodeString(jwk.E)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode exponent: %w", err)
@@ -70,18 +70,18 @@ func jwkToRSAPublicKey(jwk JWK) (*rsa.PublicKey, error) {
 	}, nil
 }
 
-// Extracts the trusted Clerk domain from the publishable key
-func getTrustedIssuerDomain() string {
+// Resolve the exact HTTPS issuer from server configuration, never from a token.
+func getTrustedIssuer() (string, error) {
 	pubKey := os.Getenv("CLERK_PUBLISHABLE_KEY")
 	if pubKey == "" {
-		return ""
+		return "", errors.New("CLERK_PUBLISHABLE_KEY must be set")
 	}
-	
+
 	parts := strings.Split(pubKey, "_")
-	if len(parts) < 3 {
-		return ""
+	if len(parts) != 3 || parts[0] != "pk" || (parts[1] != "test" && parts[1] != "live") {
+		return "", errors.New("CLERK_PUBLISHABLE_KEY has an invalid format")
 	}
-	
+
 	encoded := parts[2]
 	switch len(encoded) % 4 {
 	case 2:
@@ -89,17 +89,22 @@ func getTrustedIssuerDomain() string {
 	case 3:
 		encoded += "="
 	}
-	
+
 	decoded, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
-		return ""
+		return "", errors.New("CLERK_PUBLISHABLE_KEY has invalid base64 encoding")
 	}
-	
-	domain := string(decoded)
-	if idx := strings.Index(domain, "$"); idx != -1 {
-		domain = domain[:idx]
+
+	if !strings.HasSuffix(string(decoded), "$") {
+		return "", errors.New("CLERK_PUBLISHABLE_KEY has an invalid domain encoding")
 	}
-	return domain
+	domain := strings.TrimSuffix(string(decoded), "$")
+	// Only DNS names are allowed: no scheme, credentials, port, path or query.
+	domainPattern := `^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`
+	if len(domain) > 253 || !regexp.MustCompile(domainPattern).MatchString(domain) {
+		return "", errors.New("CLERK_PUBLISHABLE_KEY contains an invalid domain")
+	}
+	return "https://" + strings.ToLower(domain), nil
 }
 
 // Fetches and caches JWKS from the Clerk issuer URL
@@ -124,7 +129,12 @@ func getIssuerPublicKeys(issuer string) (map[string]*rsa.PublicKey, error) {
 	}
 
 	jwksURL := fmt.Sprintf("%s/.well-known/jwks.json", strings.TrimSuffix(issuer, "/"))
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	resp, err := client.Get(jwksURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch JWKS from %s: %w", jwksURL, err)
@@ -157,10 +167,18 @@ func getIssuerPublicKeys(issuer string) (map[string]*rsa.PublicKey, error) {
 	return keys, nil
 }
 
-// RequireClerkAuth is a middleware that enforces and validates Clerk JWT session tokens
-func RequireClerkAuth(next http.Handler) http.Handler {
-	trustedDomain := getTrustedIssuerDomain()
+// NewClerkAuth validates configuration once, before the server starts.
+func NewClerkAuth() (func(http.Handler) http.Handler, error) {
+	trustedIssuer, err := getTrustedIssuer()
+	if err != nil {
+		return nil, err
+	}
+	return func(next http.Handler) http.Handler {
+		return requireClerkAuth(trustedIssuer, next)
+	}, nil
+}
 
+func requireClerkAuth(trustedIssuer string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
@@ -169,7 +187,7 @@ func RequireClerkAuth(next http.Handler) http.Handler {
 		}
 
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-		
+
 		// Parse without validating signature first to extract headers and claims (specifically the issuer 'iss')
 		parser := jwt.NewParser()
 		token, _, err := parser.ParseUnverified(tokenStr, jwt.MapClaims{})
@@ -190,20 +208,14 @@ func RequireClerkAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		// Security check: Verify the issuer domain matches our trusted Clerk domain
-		if trustedDomain != "" {
-			issURL, err := url.Parse(iss)
-			if err != nil || (issURL.Host != trustedDomain && !strings.HasSuffix(issURL.Host, "."+trustedDomain)) {
-				// Allow bypass in local development if environment says so, but enforce strictly otherwise
-				if os.Getenv("GO_ENV") == "production" {
-					http.Error(w, `{"error":"Unauthorized: Untrusted token issuer"}`, http.StatusUnauthorized)
-					return
-				}
-			}
+		// Reject untrusted claims before any JWKS request, in every environment.
+		if iss != trustedIssuer {
+			http.Error(w, `{"error":"Unauthorized: Untrusted token issuer"}`, http.StatusUnauthorized)
+			return
 		}
 
-		// Retrieve public keys for this issuer
-		publicKeys, err := getIssuerPublicKeys(iss)
+		// The destination is pinned to configuration, even after comparing iss.
+		publicKeys, err := getIssuerPublicKeys(trustedIssuer)
 		if err != nil {
 			http.Error(w, fmt.Sprintf(`{"error":"Unauthorized: Failed to load public keys: %s"}`, err.Error()), http.StatusUnauthorized)
 			return
@@ -220,15 +232,20 @@ func RequireClerkAuth(next http.Handler) http.Handler {
 				return nil, fmt.Errorf("key ID %s not found in JWKS", kid)
 			}
 			return pubKey, nil
-		})
+		}, jwt.WithIssuer(trustedIssuer))
 
 		if err != nil || !parsedToken.Valid {
 			http.Error(w, `{"error":"Unauthorized: Invalid or expired token"}`, http.StatusUnauthorized)
 			return
 		}
 
-		// Extract Clerk User ID (sub claim)
-		sub, _ := claims["sub"].(string)
+		// Identity must come from claims that passed signature and issuer validation.
+		verifiedClaims, ok := parsedToken.Claims.(jwt.MapClaims)
+		if !ok {
+			http.Error(w, `{"error":"Unauthorized: Invalid claims format"}`, http.StatusUnauthorized)
+			return
+		}
+		sub, _ := verifiedClaims["sub"].(string)
 		if sub == "" {
 			http.Error(w, `{"error":"Unauthorized: Missing sub (User ID) claim"}`, http.StatusUnauthorized)
 			return

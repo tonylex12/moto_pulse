@@ -22,6 +22,11 @@ func main() {
 		log.Println("⚠️ Warning: No .env file found, reading variables from system environment.")
 	}
 
+	clerkAuth, err := middleware.NewClerkAuth()
+	if err != nil {
+		log.Fatalf("Invalid Clerk authentication configuration: %v", err)
+	}
+
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		log.Fatal("❌ DATABASE_URL must be set in environment variables.")
@@ -33,7 +38,7 @@ func main() {
 	}
 
 	// Initialize Database connection and run migrations
-	_, err := db.InitDB(databaseURL)
+	_, err = db.InitDB(databaseURL)
 	if err != nil {
 		log.Fatalf("❌ Database connection failed: %v", err)
 	}
@@ -61,7 +66,7 @@ func main() {
 
 	// Clerk Auth authenticated route group
 	r.Group(func(sub chi.Router) {
-		sub.Use(middleware.RequireClerkAuth)
+		sub.Use(clerkAuth)
 
 		// User endpoints
 		sub.Post("/api/users/sync", handlers.SyncUser)
