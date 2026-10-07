@@ -7,6 +7,7 @@ import Svg, { Path, Circle, Line, Text as SvgText, Defs, LinearGradient, Stop, G
 import { api } from '../../utils/api';
 import { useAlert } from '../../utils/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
+import { useGarage } from '../../features/garage/GarageContext';
 
 const parseIsoDate = (dateStr: string) => {
   if (!dateStr) return new Date();
@@ -68,7 +69,7 @@ const FuelEfficiencyChart: React.FC<{ logs: FuelLog[]; isDark: boolean }> = ({ l
     }
   }
 
-  const strokeColor = isDark ? '#00A3E0' : '#1C69D4';
+  const strokeColor = isDark ? '#FF5A1F' : '#FF5A1F';
   const fillColor = isDark ? 'rgba(0, 163, 224, 0.12)' : 'rgba(28, 105, 212, 0.08)';
 
   if (efficiencies.length < 2) {
@@ -162,6 +163,7 @@ export default function FuelLogsScreen() {
   const { theme, colors } = useTheme();
   const activeBmwColor = theme === 'light' ? colors.bmwBlue : colors.bmwLightBlue;
   const insets = useSafeAreaInsets();
+	const { activeVehicle: vehicle, refreshGarage } = useGarage();
 
   const tftStyles = {
     bezelBg: theme === "light" ? "#FFFFFF" : "#0F1216",
@@ -169,18 +171,17 @@ export default function FuelLogsScreen() {
     screenBg: theme === "light" ? "#EBF0F5" : "#050709",
     screenBorder: theme === "light" ? "#D8E0EB" : "#171B22",
     headerBorder: theme === "light" ? "#D8E0EB" : "rgba(255,255,255,0.08)",
-    headerText: theme === "light" ? "#1C69D4" : "#00A3E0",
+    headerText: theme === "light" ? "#FF5A1F" : "#FF5A1F",
     timeText: theme === "light" ? "#4E5E72" : "#8E9FBC",
     textMain: theme === "light" ? "#002C5B" : "#FFFFFF",
     textSec: theme === "light" ? "#4E5E72" : "#A0AEC0",
     cardBg: theme === "light" ? "#FFFFFF" : "#121620",
     cardBorder: theme === "light" ? "#D8E0EB" : "#242D3D",
     // Accent colors
-    accentBlue: theme === "light" ? "#1C69D4" : "#00E5FF",
+    accentBlue: theme === "light" ? "#FF5A1F" : "#FF5A1F",
     accentRed: colors.bmwRed,
   };
   
-  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [logs, setLogs] = useState<FuelLog[]>([]);
   const [stats, setStats] = useState<Stats>({
     totalLogs: 0,
@@ -206,12 +207,8 @@ export default function FuelLogsScreen() {
 
   const loadData = async () => {
     try {
-      const vehicleRes = await api.get('vehicles');
-      const list = vehicleRes.data || [];
-      if (list.length > 0) {
-        const activeVehicle = list.find((v: any) => v.isActive) || list[0];
-        setVehicle(activeVehicle);
-
+	  const activeVehicle = vehicle ?? (await refreshGarage()).find(v => v.isActive) ?? null;
+	  if (activeVehicle) {
         const [logsRes, statsRes] = await Promise.all([
           api.get(`fuel-logs/vehicle/${activeVehicle.id}`),
           api.get(`fuel-logs/stats/${activeVehicle.id}`)
@@ -221,7 +218,7 @@ export default function FuelLogsScreen() {
         
         setOdometer(activeVehicle.currentMileage.toString());
       } else {
-        setVehicle(null);
+		setLogs([]);
       }
     } catch (e) {
       console.error('Error fetching logs/stats:', e);
@@ -233,7 +230,7 @@ export default function FuelLogsScreen() {
 
   useEffect(() => {
     loadData();
-  }, []);
+	}, [vehicle?.id]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -352,12 +349,12 @@ export default function FuelLogsScreen() {
             style={{
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: '#1C69D4',
+              backgroundColor: '#FF5A1F',
               borderRadius: 20,
               paddingHorizontal: 12,
               paddingVertical: 6,
               borderWidth: 1,
-              borderColor: '#1C69D4',
+              borderColor: '#FF5A1F',
             }}
           >
             <Plus size={14} color="#FFFFFF" />
@@ -424,28 +421,28 @@ export default function FuelLogsScreen() {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
                 {/* Avg Consumption */}
                 <View style={{ flex: 1, backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620', borderColor: tftStyles.screenBorder, borderWidth: 0.5, borderRadius: 10, padding: 8, alignItems: 'center' }}>
-                  <Activity size={16} color={theme === 'light' ? '#1C69D4' : '#00A3E0'} style={{ marginBottom: 4 }} />
+                  <Activity size={16} color={theme === 'light' ? '#FF5A1F' : '#FF5A1F'} style={{ marginBottom: 4 }} />
                   <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 8, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
                     RENDIMIENTO
                   </Text>
                   <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 16, color: tftStyles.textMain, letterSpacing: -0.5 }}>
                     {stats.avgConsumption > 0 ? `${stats.avgConsumption}` : '---'}
                   </Text>
-                  <Text style={{ fontFamily: 'BarlowCondensed-SemiBold', fontSize: 8, color: theme === 'light' ? '#1C69D4' : '#00E5FF', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 1 }}>
+                  <Text style={{ fontFamily: 'BarlowCondensed-SemiBold', fontSize: 8, color: theme === 'light' ? '#FF5A1F' : '#FF5A1F', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 1 }}>
                     KM / LITRO
                   </Text>
                 </View>
 
                 {/* Total Spend */}
                 <View style={{ flex: 1, backgroundColor: theme === 'light' ? '#FFFFFF' : '#121620', borderColor: tftStyles.screenBorder, borderWidth: 0.5, borderRadius: 10, padding: 8, alignItems: 'center' }}>
-                  <DollarSign size={16} color={theme === 'light' ? '#1C69D4' : '#00A3E0'} style={{ marginBottom: 4 }} />
+                  <DollarSign size={16} color={theme === 'light' ? '#FF5A1F' : '#FF5A1F'} style={{ marginBottom: 4 }} />
                   <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 8, color: tftStyles.textSec, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
                     GASTO TOTAL
                   </Text>
                   <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 16, color: tftStyles.textMain, letterSpacing: -0.5 }}>
                     ${stats.totalCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
                   </Text>
-                  <Text style={{ fontFamily: 'BarlowCondensed-SemiBold', fontSize: 8, color: theme === 'light' ? '#1C69D4' : '#00E5FF', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 1 }}>
+                  <Text style={{ fontFamily: 'BarlowCondensed-SemiBold', fontSize: 8, color: theme === 'light' ? '#FF5A1F' : '#FF5A1F', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 1 }}>
                     COP / USD
                   </Text>
                 </View>
@@ -491,13 +488,13 @@ export default function FuelLogsScreen() {
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   borderLeftWidth: 4,
-                  borderLeftColor: theme === 'light' ? '#1C69D4' : '#00E5FF',
+                  borderLeftColor: theme === 'light' ? '#FF5A1F' : '#FF5A1F',
                 }}
               >
                 <View style={{ flex: 1 }}>
                   {/* Date & Icon */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                    <Calendar size={11} color={theme === 'light' ? '#1C69D4' : '#00E5FF'} />
+                    <Calendar size={11} color={theme === 'light' ? '#FF5A1F' : '#FF5A1F'} />
                     <Text style={{ 
                       fontFamily: 'BarlowCondensed-Bold', 
                       fontSize: 10, 
@@ -526,10 +523,10 @@ export default function FuelLogsScreen() {
                     <Text style={{ fontFamily: 'BarlowCondensed-Medium', fontSize: 10, color: tftStyles.textSec, marginRight: 4, textTransform: 'uppercase' }}>
                       A LOS
                     </Text>
-                    <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 12, color: theme === 'light' ? '#002C5B' : '#00E5FF', letterSpacing: 0.5 }}>
+                    <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 12, color: theme === 'light' ? '#002C5B' : '#FF5A1F', letterSpacing: 0.5 }}>
                       {log.odometer.toLocaleString()}
                     </Text>
-                    <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 10, color: theme === 'light' ? '#1C69D4' : '#00E5FF', marginLeft: 3 }}>
+                    <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 10, color: theme === 'light' ? '#FF5A1F' : '#FF5A1F', marginLeft: 3 }}>
                       KM
                     </Text>
                   </View>
@@ -792,14 +789,14 @@ export default function FuelLogsScreen() {
                   disabled={logging}
                   style={{
                     width: '100%',
-                    backgroundColor: '#1C69D4',
+                    backgroundColor: '#FF5A1F',
                     borderRadius: 12,
                     paddingVertical: 14,
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderWidth: 1,
-                    borderColor: '#1C69D4',
-                    shadowColor: '#1C69D4',
+                    borderColor: '#FF5A1F',
+                    shadowColor: '#FF5A1F',
                     shadowOffset: { width: 0, height: 0 },
                     shadowOpacity: 0.4,
                     shadowRadius: 12,

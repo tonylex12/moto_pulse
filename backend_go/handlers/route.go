@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"backend_go/db"
 	"backend_go/middleware"
@@ -10,15 +11,23 @@ import (
 )
 
 type CreateRouteInput struct {
-	Name         string      `json:"name"`
-	Coordinates  interface{} `json:"coordinates"` // Raw JSON array of coordinates
-	StartPoint   *string     `json:"startPoint"`
-	EndPoint     *string     `json:"endPoint"`
-	Distance     *float64    `json:"distance"`
-	Notes        *string     `json:"notes"`
-	MaxSpeed     *float64    `json:"maxSpeed"`
-	MaxLeftLean  *float64    `json:"maxLeftLean"`
-	MaxRightLean *float64    `json:"maxRightLean"`
+	Name         string            `json:"name"`
+	Coordinates  []RouteCoordinate `json:"coordinates"`
+	StartPoint   *string           `json:"startPoint"`
+	EndPoint     *string           `json:"endPoint"`
+	Distance     *float64          `json:"distance"`
+	Notes        *string           `json:"notes"`
+	MaxSpeed     *float64          `json:"maxSpeed"`
+	MaxLeftLean  *float64          `json:"maxLeftLean"`
+	MaxRightLean *float64          `json:"maxRightLean"`
+}
+
+type RouteCoordinate struct {
+	Latitude  float64  `json:"latitude"`
+	Longitude float64  `json:"longitude"`
+	Speed     *float64 `json:"speed,omitempty"`
+	LeanAngle *float64 `json:"leanAngle,omitempty"`
+	Time      *float64 `json:"time,omitempty"`
 }
 
 // GetRoutes lists all routes saved by the authenticated user
@@ -49,9 +58,21 @@ func CreateRoute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input CreateRouteInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.Name == "" || input.Coordinates == nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil || strings.TrimSpace(input.Name) == "" || len(input.Coordinates) == 0 || len(input.Coordinates) > 20000 {
 		http.Error(w, `{"error":"Invalid request payload"}`, http.StatusBadRequest)
 		return
+	}
+	if len([]rune(input.Name)) > 100 {
+		http.Error(w, `{"error":"Route name is too long"}`, http.StatusBadRequest)
+		return
+	}
+	for _, point := range input.Coordinates {
+		if point.Latitude < -90 || point.Latitude > 90 || point.Longitude < -180 || point.Longitude > 180 {
+			http.Error(w, `{"error":"Invalid route coordinates"}`, http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Marshal coordinates payload to JSON raw bytes

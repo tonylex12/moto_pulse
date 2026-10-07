@@ -126,8 +126,8 @@ export const TachometerGauge: React.FC<TachometerGaugeProps> = ({
               alignSelf: 'flex-start',
             }}
           >
-            <Wrench size={12} color="#1C69D4" style={{ marginRight: 6 }} />
-            <Text className="font-rajdhani-bold text-[10px] text-[#1C69D4] font-bold uppercase tracking-wider">
+            <Wrench size={12} color="#FF5A1F" style={{ marginRight: 6 }} />
+            <Text className="font-rajdhani-bold text-[10px] text-[#FF5A1F] font-bold uppercase tracking-wider">
               Registrar
             </Text>
           </TouchableOpacity>

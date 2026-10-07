@@ -53,7 +53,7 @@ const AltimetrySparkline: React.FC<{ seedId: string; isDark: boolean }> = ({ see
     return `${index === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
   }).join(' ');
 
-  const strokeColor = isDark ? '#00A3E0' : '#1C69D4';
+  const strokeColor = isDark ? '#FF5A1F' : '#FF5A1F';
 
   return (
     <View style={{ width, height, justifyContent: 'center', marginLeft: 8, opacity: 0.85 }}>
@@ -1230,7 +1230,7 @@ export default function RoutesMapScreen() {
             {/* Speed Arc Gradient */}
             <LinearGradient id="speedGrad" x1="0%" y1="100%" x2="100%" y2="0%">
               <Stop offset="0%" stopColor="#005A9C" />
-              <Stop offset="100%" stopColor="#00E5FF" />
+              <Stop offset="100%" stopColor="#FF5A1F" />
             </LinearGradient>
 
             {/* Acceleration Arc Gradient */}
@@ -1577,9 +1577,9 @@ export default function RoutesMapScreen() {
           >
             <View className="flex-row items-center justify-center" style={{ marginBottom: Math.max(4, 8 * scale) }}>
               <View 
-                className={`w-1.5 h-1.5 rounded-full mr-1.5 ${isConnected ? 'bg-[#00E5FF]' : 'bg-[#EF4444]'}`}
+                className={`w-1.5 h-1.5 rounded-full mr-1.5 ${isConnected ? 'bg-[#FF5A1F]' : 'bg-[#EF4444]'}`}
                 style={{
-                  shadowColor: isConnected ? '#00E5FF' : '#EF4444',
+                  shadowColor: isConnected ? '#FF5A1F' : '#EF4444',
                   shadowOffset: { width: 0, height: 0 },
                   shadowOpacity: 0.8,
                   shadowRadius: 3,
@@ -1611,10 +1611,10 @@ export default function RoutesMapScreen() {
               >
                 <Settings 
                   size={Math.max(8, 10 * scale)} 
-                  color="#00E5FF" 
+                  color="#FF5A1F"
                   style={{ marginRight: Math.max(4, 6 * scale) }}
                 />
-                <Text style={{ fontSize: Math.max(8, 10 * scale), color: '#00E5FF', fontWeight: 'bold' }}>
+                <Text style={{ fontSize: Math.max(8, 10 * scale), color: '#FF5A1F', fontWeight: 'bold' }}>
                   CALIBRAR CERO
                 </Text>
               </TouchableOpacity>
@@ -2352,7 +2352,7 @@ export default function RoutesMapScreen() {
                               }}
                               className={`${colors.card} border ${colors.border} p-2 rounded-lg`}
                             >
-                              <Video size={16} color="#00E5FF" />
+                              <Video size={16} color="#FF5A1F" />
                             </TouchableOpacity>
                           )}
                           <TouchableOpacity
@@ -2470,7 +2470,7 @@ export default function RoutesMapScreen() {
                     console.warn('Failed to toggle play/pause:', e);
                   }
                 }}
-                className="p-3 bg-[#00A3E0] rounded-full"
+                className="p-3 bg-[#FF5A1F] rounded-full"
               >
                 {isPlayingVideo ? (
                   <View className="flex-row justify-center items-center" style={{ gap: 4 }}>
@@ -2488,7 +2488,7 @@ export default function RoutesMapScreen() {
                   style={{ 
                     width: `${playbackDuration > 0 ? (playbackTime / playbackDuration) * 100 : 0}%`,
                     height: '100%',
-                    backgroundColor: '#00A3E0'
+                    backgroundColor: '#FF5A1F'
                   }} 
                 />
               </View>
@@ -2581,12 +2581,12 @@ const LEAFLET_HTML = `
     var userMarker = null;
     var userIcon = L.divIcon({
       className: 'user-location-icon',
-      html: '<div style="width: 14px; height: 14px; background-color: #00A3E0; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 8px #00A3E0;"></div>',
+      html: '<div style="width: 14px; height: 14px; background-color: #FF5A1F; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 8px #FF5A1F;"></div>',
       iconSize: [14, 14],
       iconAnchor: [7, 7]
     });
 
-    var activePolyline = L.polyline([], { color: '#00A3E0', weight: 5 }).addTo(map);
+    var activePolyline = L.polyline([], { color: '#FF5A1F', weight: 5 }).addTo(map);
     var selectedPolyline = L.polyline([], { color: '#EF4444', weight: 5 }).addTo(map);
     var startMarker = null;
     var endMarker = null;

@@ -44,10 +44,10 @@ flowchart LR
 
 `mobile/app/` contains authentication and tab routes; `hooks/` handles device
 features; `utils/` contains the HTTP client, token cache and UI contexts.
-`backend_go/main.go` wires routes and the scheduler; `middleware/` validates
-authentication; `handlers/` contains request and business logic; `db/` defines
-models; `push/` and `scraper/` handle external calls. This is a single backend
-process, not a microservice system. GORM currently migrates the schema at startup.
+`backend_go/main.go` wires routes and durable workers; `middleware/` validates
+authentication and hardens HTTP; `handlers/` contains request and business logic;
+`db/` defines models and ordered migrations; `push/` and `scraper/` handle external
+calls. This remains a modular monolith. PostgreSQL stores retryable background jobs.
 
 ## Run locally
 
@@ -83,6 +83,7 @@ CRON_SECRET=<your-own-random-cron-secret>
 | `CLERK_PUBLISHABLE_KEY` | Required valid Clerk publishable key; determines the trusted issuer. |
 | `PORT` | Optional; defaults to `3000`. |
 | `CRON_SECRET` | Required only to enable the external cron endpoint; the internal scheduler still runs without it. |
+| `CORS_ALLOWED_ORIGINS` | Optional comma-separated web origins; defaults to local development origins. |
 | `TEST_DATABASE_URL` | Used only by integration tests; must identify a separate database ending in `_test`. |
 
 The current backend does not read `CLERK_SECRET_KEY` or `GEMINI_API_KEY`.

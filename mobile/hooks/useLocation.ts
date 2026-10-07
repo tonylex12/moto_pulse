@@ -3,6 +3,7 @@ import { Alert, DeviceEventEmitter, AppState, AppStateStatus } from 'react-nativ
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearActiveRoute, initializeActiveRoute, loadActiveRoute, persistActiveRoute } from '../features/rides/routeStorage';
 
 export interface Coordinate {
   latitude: number;
@@ -58,10 +59,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       if (!locations || locations.length === 0) return;
 
       // Read current state from AsyncStorage
-      const storedData = await AsyncStorage.getItem(ACTIVE_ROUTE_STORAGE_KEY);
-      let activeRoute = storedData 
-        ? JSON.parse(storedData) 
-        : { coordinates: [], totalDistance: 0, startTime: null };
+	  let activeRoute = await loadActiveRoute() ?? { coordinates: [], totalDistance: 0, startTime: null };
 
       let updated = false;
 
@@ -150,7 +148,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 
       if (updated) {
         // Save updated state back to AsyncStorage
-        await AsyncStorage.setItem(ACTIVE_ROUTE_STORAGE_KEY, JSON.stringify(activeRoute));
+		await persistActiveRoute(activeRoute);
 
         // Also update the global module variables for any active foreground UI context
         recordedRouteGlobal = activeRoute.coordinates;
@@ -194,9 +192,8 @@ export const useLocation = (currentLean?: number) => {
   // Load route from storage on startup or when app comes to foreground
   const loadRouteFromStorage = async () => {
     try {
-      const storedData = await AsyncStorage.getItem(ACTIVE_ROUTE_STORAGE_KEY);
-      if (storedData) {
-        const activeRoute = JSON.parse(storedData);
+	  const activeRoute = await loadActiveRoute();
+	  if (activeRoute) {
         if (activeRoute && activeRoute.coordinates && activeRoute.coordinates.length > 0) {
           recordedRouteGlobal = activeRoute.coordinates;
           totalDistanceGlobal = activeRoute.totalDistance;
@@ -261,7 +258,7 @@ export const useLocation = (currentLean?: number) => {
                 foregroundService: {
                   notificationTitle: 'MotoPulse - Grabando Ruta',
                   notificationBody: 'MotoPulse está registrando tu telemetría y coordenadas GPS en tiempo real.',
-                  notificationColor: '#00A3E0',
+                  notificationColor: '#FF5A1F',
                 },
               });
             } else {
@@ -443,11 +440,11 @@ export const useLocation = (currentLean?: number) => {
         setTotalDistance(totalDistanceGlobal);
 
         // Persist the updated state to AsyncStorage
-        AsyncStorage.setItem(ACTIVE_ROUTE_STORAGE_KEY, JSON.stringify({
+		persistActiveRoute({
           coordinates: [...recordedRouteGlobal],
           totalDistance: totalDistanceGlobal,
           startTime: startTimeGlobal
-        })).catch(e => console.warn('Failed to save route to storage:', e));
+		}).catch(e => console.warn('Failed to save route to storage:', e));
 
         console.log(`[ForegroundUpdate] Added point: Lat ${newCoord.latitude}, Lng ${newCoord.longitude}. Total points: ${recordedRouteGlobal.length}`);
         return [...recordedRouteGlobal];
@@ -487,11 +484,7 @@ export const useLocation = (currentLean?: number) => {
     // Clear active route and set recording active in storage
     try {
       await AsyncStorage.setItem(IS_RECORDING_STORAGE_KEY, 'true');
-      await AsyncStorage.setItem(ACTIVE_ROUTE_STORAGE_KEY, JSON.stringify({
-        coordinates: [],
-        totalDistance: 0,
-        startTime: startTimeGlobal
-      }));
+	  await initializeActiveRoute(startTimeGlobal);
     } catch (e) {
       console.warn('Failed to initialize AsyncStorage active route keys:', e);
     }
@@ -519,7 +512,7 @@ export const useLocation = (currentLean?: number) => {
           foregroundService: {
             notificationTitle: 'MotoPulse - Grabando Ruta',
             notificationBody: 'MotoPulse está registrando tu telemetría y coordenadas GPS en tiempo real.',
-            notificationColor: '#00A3E0',
+            notificationColor: '#FF5A1F',
           },
         });
       } catch (err) {
@@ -580,7 +573,7 @@ export const useLocation = (currentLean?: number) => {
     startTimeGlobal = null;
     lastLocationGlobal = null;
     
-    AsyncStorage.removeItem(ACTIVE_ROUTE_STORAGE_KEY).catch((e) => {
+	clearActiveRoute().catch((e) => {
       console.warn('Failed to remove active route in storage:', e);
     });
     AsyncStorage.setItem(IS_RECORDING_STORAGE_KEY, 'false').catch((e) => {

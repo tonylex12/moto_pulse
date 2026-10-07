@@ -59,7 +59,9 @@ func CreateFuelLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input CreateFuelLogInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.VehicleID == "" || input.Odometer < 0 || input.Liters <= 0 || input.Price <= 0 {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil || input.VehicleID == "" || input.Odometer < 0 || input.Odometer > 2000000 || input.Liters <= 0 || input.Liters > 200 || input.Price <= 0 || input.Price > 100000 {
 		http.Error(w, `{"error":"Invalid request payload"}`, http.StatusBadRequest)
 		return
 	}

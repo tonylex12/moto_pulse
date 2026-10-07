@@ -36,6 +36,7 @@ import { usePushNotifications } from "../../hooks/usePushNotifications";
 import { TachometerGauge } from "../../components/ui/TachometerGauge";
 import { useAlert } from "../../utils/AlertContext";
 import { useTheme } from "../../utils/ThemeContext";
+import { useGarage } from "../../features/garage/GarageContext";
 
 interface Vehicle {
   id: string;
@@ -114,6 +115,7 @@ export default function DashboardScreen() {
   const { expoPushToken } = usePushNotifications();
   const { theme, colors, toggleTheme } = useTheme();
   const insets = useSafeAreaInsets();
+	const { refreshGarage, activateVehicle } = useGarage();
 
   // State
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
@@ -406,8 +408,7 @@ export default function DashboardScreen() {
   const fetchData = async () => {
     try {
       // Changed to relative paths without leading slash
-      const response = await api.get("vehicles");
-      const list = response.data || [];
+	  const list = await refreshGarage();
       setVehicles(list);
 
       if (list.length > 0) {
@@ -550,7 +551,7 @@ export default function DashboardScreen() {
     setLoading(true);
     setIsGarageOpen(false);
     try {
-      await api.put(`vehicles/${id}/active`);
+	  await activateVehicle(id);
       await fetchData();
     } catch (e) {
       console.error("Error switching active vehicle:", e);
@@ -683,7 +684,7 @@ export default function DashboardScreen() {
     screenBg: theme === "light" ? "#EBF0F5" : "#050709",
     screenBorder: theme === "light" ? "#D8E0EB" : "#171B22",
     headerBorder: theme === "light" ? "#D8E0EB" : "rgba(255,255,255,0.08)",
-    headerText: theme === "light" ? "#1C69D4" : "#00A3E0",
+    headerText: theme === "light" ? "#FF5A1F" : "#FF5A1F",
     timeText: theme === "light" ? "#4E5E72" : "#8E9FBC",
     speedText: theme === "light" ? "#002C5B" : "#FFFFFF",
     speedUnit: theme === "light" ? "#4E5E72" : "#8E9FBC",
@@ -694,9 +695,9 @@ export default function DashboardScreen() {
     odoBg: theme === "light" ? "#D8E0EB" : "#0A0D12",
     odoBorder: theme === "light" ? "#CBD5E0" : "#171B22",
     odoBgDigits: theme === "light" ? "rgba(0, 0, 0, 0.06)" : "rgba(255, 255, 255, 0.04)",
-    odoText: theme === "light" ? "#1C69D4" : "#00E5FF",
+    odoText: theme === "light" ? "#FF5A1F" : "#FF5A1F",
     odoShadow: theme === "light" ? "rgba(28, 105, 212, 0.3)" : "rgba(0, 229, 255, 0.6)",
-    odoUnit: theme === "light" ? "#1C69D4" : "#00E5FF",
+    odoUnit: theme === "light" ? "#FF5A1F" : "#FF5A1F",
     footerText: theme === "light" ? "#002C5B" : "#FFFFFF",
     footerSecText: theme === "light" ? "#4E5E72" : "#8E9FBC",
     statusLed: "#34C759",
@@ -737,9 +738,9 @@ export default function DashboardScreen() {
           disabled={vehicles.length === 0}
         >
           <View
-            className="w-8 h-8 rounded-full bg-[#1C69D4] items-center justify-center mr-2"
+            className="w-8 h-8 rounded-full bg-[#FF5A1F] items-center justify-center mr-2"
             style={{
-              shadowColor: "#1C69D4",
+              shadowColor: "#FF5A1F",
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: 0.8,
               shadowRadius: 8,
@@ -755,7 +756,7 @@ export default function DashboardScreen() {
               MOTO
               <Text
                 className={
-                  theme === "light" ? "text-[#1C69D4]" : "text-[#00A3E0]"
+                  theme === "light" ? "text-[#FF5A1F]" : "text-[#FF5A1F]"
                 }
               >
                 PULSE
@@ -764,7 +765,7 @@ export default function DashboardScreen() {
             {vehicle && (
               <View className="flex-row items-center mt-0.5">
                 <Text
-                  className={`${theme === "light" ? "text-[#1C69D4]" : "text-[#00A3E0]"} font-barlow-condensed-bold text-xs font-bold uppercase tracking-wider mr-1`}
+                  className={`${theme === "light" ? "text-[#FF5A1F]" : "text-[#FF5A1F]"} font-barlow-condensed-bold text-xs font-bold uppercase tracking-wider mr-1`}
                 >
                   {vehicle.brand} {vehicle.model}
                 </Text>
@@ -840,8 +841,8 @@ export default function DashboardScreen() {
                 setRefreshing(true);
                 fetchData();
               }}
-              tintColor={theme === 'light' ? '#1C69D4' : '#00A3E0'}
-              colors={['#1C69D4']}
+              tintColor={theme === 'light' ? '#FF5A1F' : '#FF5A1F'}
+              colors={['#FF5A1F']}
             />
           }
         >
@@ -1131,7 +1132,7 @@ export default function DashboardScreen() {
                         <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 15, color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 }}>
                           {vehicle.brand.toUpperCase()}
                         </Text>
-                        <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 12, color: '#00A3E0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        <Text style={{ fontFamily: 'Barlow-Bold', fontSize: 12, color: '#FF5A1F', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                           {vehicle.model}
                         </Text>
                       </View>
@@ -1235,9 +1236,9 @@ export default function DashboardScreen() {
                     <View className="flex-row flex-wrap justify-center gap-2">
                       <TouchableOpacity
                         onPress={handleFetchSpecs}
-                        className="bg-[#1C69D4] px-4 py-2.5 rounded-xl flex-row items-center mr-2"
+                        className="bg-[#FF5A1F] px-4 py-2.5 rounded-xl flex-row items-center mr-2"
                         style={{
-                          shadowColor: "#1C69D4",
+                          shadowColor: "#FF5A1F",
                           shadowOffset: { width: 0, height: 2 },
                           shadowOpacity: 0.5,
                           shadowRadius: 6,
@@ -1252,8 +1253,8 @@ export default function DashboardScreen() {
                         onPress={openEditSpecsModal}
                         className="bg-neutral-500/10 border border-neutral-400/30 px-4 py-2.5 rounded-xl flex-row items-center"
                       >
-                        <Pencil size={12} color={theme === 'light' ? '#1C69D4' : '#00A3E0'} style={{ marginRight: 4 }} />
-                        <Text className="text-xs font-bold uppercase tracking-wider ml-1" style={{ color: theme === 'light' ? '#1C69D4' : '#00A3E0' }}>
+                        <Pencil size={12} color={theme === 'light' ? '#FF5A1F' : '#FF5A1F'} style={{ marginRight: 4 }} />
+                        <Text className="text-xs font-bold uppercase tracking-wider ml-1" style={{ color: theme === 'light' ? '#FF5A1F' : '#FF5A1F' }}>
                           Ingresar Datos
                         </Text>
                       </TouchableOpacity>
@@ -1469,11 +1470,11 @@ export default function DashboardScreen() {
                         className="bg-neutral-500/10 border border-neutral-400/30 px-3 py-2.5 rounded-xl flex-row items-center justify-center flex-1"
                       >
                         {fetchingSpecs ? (
-                          <ActivityIndicator size="small" color={theme === 'light' ? '#1C69D4' : '#00A3E0'} style={{ marginRight: 6 }} />
+                          <ActivityIndicator size="small" color={theme === 'light' ? '#FF5A1F' : '#FF5A1F'} style={{ marginRight: 6 }} />
                         ) : (
-                          <Search size={12} color={theme === 'light' ? '#1C69D4' : '#00A3E0'} style={{ marginRight: 6 }} />
+                          <Search size={12} color={theme === 'light' ? '#FF5A1F' : '#FF5A1F'} style={{ marginRight: 6 }} />
                         )}
-                        <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: theme === 'light' ? '#1C69D4' : '#00A3E0' }}>
+                        <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: theme === 'light' ? '#FF5A1F' : '#FF5A1F' }}>
                           {fetchingSpecs ? "Buscando..." : "Buscar especificaciones completas"}
                         </Text>
                       </TouchableOpacity>
@@ -1482,8 +1483,8 @@ export default function DashboardScreen() {
                         className="bg-neutral-500/10 border border-neutral-400/30 px-3 py-2.5 rounded-xl flex-row items-center justify-center"
                         style={{ width: 120 }}
                       >
-                        <Pencil size={12} color={theme === 'light' ? '#1C69D4' : '#00A3E0'} style={{ marginRight: 6 }} />
-                        <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: theme === 'light' ? '#1C69D4' : '#00A3E0' }}>
+                        <Pencil size={12} color={theme === 'light' ? '#FF5A1F' : '#FF5A1F'} style={{ marginRight: 6 }} />
+                        <Text className="text-xs font-bold uppercase tracking-wider" style={{ color: theme === 'light' ? '#FF5A1F' : '#FF5A1F' }}>
                           Editar Ficha
                         </Text>
                       </TouchableOpacity>
@@ -1694,9 +1695,9 @@ export default function DashboardScreen() {
                 <TouchableOpacity
                   onPress={handleRegisterVehicle}
                   disabled={registering}
-                  className="w-full bg-[#1C69D4] rounded-xl py-3.5 items-center justify-center border border-[#1C69D4] mt-2"
+                  className="w-full bg-[#FF5A1F] rounded-xl py-3.5 items-center justify-center border border-[#FF5A1F] mt-2"
                   style={{
-                    shadowColor: "#1C69D4",
+                    shadowColor: "#FF5A1F",
                     shadowOffset: { width: 0, height: 0 },
                     shadowOpacity: 0.4,
                     shadowRadius: 12,
@@ -1802,7 +1803,7 @@ export default function DashboardScreen() {
                       >
                         {isActive ? (
                           <View
-                            className={`${theme === "light" ? "bg-[#1C69D4]/10 border-[#1C69D4]" : "bg-[#00A3E0]/20 border-[#00A3E0]"} border rounded-full px-2.5 py-1 flex-row items-center`}
+                            className={`${theme === "light" ? "bg-[#FF5A1F]/10 border-[#FF5A1F]" : "bg-[#FF5A1F]/20 border-[#FF5A1F]"} border rounded-full px-2.5 py-1 flex-row items-center`}
                           >
                             <View
                               className="w-1.5 h-1.5 rounded-full mr-1.5"
@@ -1816,7 +1817,7 @@ export default function DashboardScreen() {
                               }}
                             />
                             <Text
-                              className={`${theme === "light" ? "text-[#1C69D4]" : "text-[#00A3E0]"} text-xxs font-bold uppercase tracking-wider`}
+                              className={`${theme === "light" ? "text-[#FF5A1F]" : "text-[#FF5A1F]"} text-xxs font-bold uppercase tracking-wider`}
                             >
                               Activa
                             </Text>
@@ -1853,9 +1854,9 @@ export default function DashboardScreen() {
                 setIsGarageOpen(false);
                 setIsRegisteringNew(true);
               }}
-              className="w-full bg-[#1C69D4] rounded-xl py-3.5 items-center justify-center border border-[#1C69D4]"
+              className="w-full bg-[#FF5A1F] rounded-xl py-3.5 items-center justify-center border border-[#FF5A1F]"
               style={{
-                shadowColor: "#1C69D4",
+                shadowColor: "#FF5A1F",
                 shadowOffset: { width: 0, height: 0 },
                 shadowOpacity: 0.4,
                 shadowRadius: 12,
@@ -1931,7 +1932,7 @@ export default function DashboardScreen() {
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       keyboardType="numeric"
                       onChangeText={setLastPerformedValue}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-3 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-3 text-sm focus:border-[#FF5A1F]`}
                     />
                   ) : (
                     <TouchableOpacity
@@ -1980,7 +1981,7 @@ export default function DashboardScreen() {
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       keyboardType="numeric"
                       onChangeText={setTriggerValue}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-3 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-3 text-sm focus:border-[#FF5A1F]`}
                     />
                   ) : (
                     <TouchableOpacity
@@ -2019,9 +2020,9 @@ export default function DashboardScreen() {
                 <TouchableOpacity
                   onPress={handleSaveMaintenance}
                   disabled={savingMaintenance}
-                  className="w-full bg-[#1C69D4] rounded-xl py-3.5 items-center justify-center border border-[#1C69D4]"
+                  className="w-full bg-[#FF5A1F] rounded-xl py-3.5 items-center justify-center border border-[#FF5A1F]"
                   style={{
-                    shadowColor: '#1C69D4',
+                    shadowColor: '#FF5A1F',
                     shadowOffset: { width: 0, height: 0 },
                     shadowOpacity: 0.4,
                     shadowRadius: 12,
@@ -2094,7 +2095,7 @@ export default function DashboardScreen() {
                       placeholder="Ej. 125 cc"
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       onChangeText={setEditEngineCc}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#FF5A1F]`}
                     />
                   </View>
 
@@ -2107,7 +2108,7 @@ export default function DashboardScreen() {
                       placeholder="Ej. 12 Litros"
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       onChangeText={setEditTankSize}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#FF5A1F]`}
                     />
                   </View>
 
@@ -2120,7 +2121,7 @@ export default function DashboardScreen() {
                       placeholder="Ej. 15 HP"
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       onChangeText={setEditPower}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#FF5A1F]`}
                     />
                   </View>
 
@@ -2133,7 +2134,7 @@ export default function DashboardScreen() {
                       placeholder="Ej. 12 Nm"
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       onChangeText={setEditTorque}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#FF5A1F]`}
                     />
                   </View>
 
@@ -2146,7 +2147,7 @@ export default function DashboardScreen() {
                       placeholder="Ej. 5 velocidades"
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       onChangeText={setEditTransmission}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#FF5A1F]`}
                     />
                   </View>
 
@@ -2159,7 +2160,7 @@ export default function DashboardScreen() {
                       placeholder="Ej. 130 kg"
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       onChangeText={setEditWeight}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#FF5A1F]`}
                     />
                   </View>
 
@@ -2172,7 +2173,7 @@ export default function DashboardScreen() {
                       placeholder="Ej. 90/90-19"
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       onChangeText={setEditFrontTire}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#FF5A1F]`}
                     />
                   </View>
 
@@ -2185,7 +2186,7 @@ export default function DashboardScreen() {
                       placeholder="Ej. 110/90-17"
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       onChangeText={setEditRearTire}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#FF5A1F]`}
                     />
                   </View>
 
@@ -2198,7 +2199,7 @@ export default function DashboardScreen() {
                       placeholder="Ej. Disco 240mm"
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       onChangeText={setEditFrontBrake}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#FF5A1F]`}
                     />
                   </View>
 
@@ -2211,7 +2212,7 @@ export default function DashboardScreen() {
                       placeholder="Ej. Tambor 130mm"
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       onChangeText={setEditRearBrake}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#FF5A1F]`}
                     />
                   </View>
 
@@ -2224,7 +2225,7 @@ export default function DashboardScreen() {
                       placeholder="Ej. Horquilla telescópica"
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       onChangeText={setEditFrontSuspension}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#FF5A1F]`}
                     />
                   </View>
 
@@ -2237,7 +2238,7 @@ export default function DashboardScreen() {
                       placeholder="Ej. Doble amortiguador"
                       placeholderTextColor={theme === 'light' ? '#8E9FBC' : '#556070'}
                       onChangeText={setEditRearSuspension}
-                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#1C69D4]`}
+                      className={`w-full ${colors.subCard} ${colors.text} border ${colors.border} rounded-xl px-4 py-2.5 text-sm focus:border-[#FF5A1F]`}
                     />
                   </View>
                 </View>
@@ -2246,9 +2247,9 @@ export default function DashboardScreen() {
                 <TouchableOpacity
                   onPress={handleSaveSpecs}
                   disabled={savingSpecs}
-                  className="w-full bg-[#1C69D4] rounded-xl py-3.5 items-center justify-center border border-[#1C69D4]"
+                  className="w-full bg-[#FF5A1F] rounded-xl py-3.5 items-center justify-center border border-[#FF5A1F]"
                   style={{
-                    shadowColor: '#1C69D4',
+                    shadowColor: '#FF5A1F',
                     shadowOffset: { width: 0, height: 0 },
                     shadowOpacity: 0.4,
                     shadowRadius: 12,

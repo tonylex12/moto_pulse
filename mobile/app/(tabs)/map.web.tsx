@@ -158,7 +158,7 @@ export default function RoutesMapWebScreen() {
             <View className="w-full max-w-md items-center">
               {/* Perspective Road View */}
               <View 
-                className="w-full h-64 rounded-2xl mb-6 relative overflow-hidden bg-[#0F1216] border border-[#00A3E0]/30 justify-center items-center"
+                className="w-full h-64 rounded-2xl mb-6 relative overflow-hidden bg-[#0F1216] border border-[#FF5A1F]/30 justify-center items-center"
                 style={{
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 10 },
@@ -197,12 +197,12 @@ export default function RoutesMapWebScreen() {
                     <View className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse" />
                     <Text className="text-red-500 font-barlow-condensed-bold font-bold text-[10px] uppercase tracking-wider">SIMULADOR ACTIVO</Text>
                   </View>
-                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 13, color: '#00E5FF' }}>{simDistance.toFixed(2)} km</Text>
+                  <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 13, color: '#FF5A1F' }}>{simDistance.toFixed(2)} km</Text>
                 </View>
 
                 {/* TFT Telemetry HUD overlay matching native styling */}
                 <View 
-                  className="absolute bottom-4 left-4 right-4 bg-[#0F1216]/95 border border-[#00A3E0]/30 rounded-xl p-3 flex-row items-center justify-between"
+                  className="absolute bottom-4 left-4 right-4 bg-[#0F1216]/95 border border-[#FF5A1F]/30 rounded-xl p-3 flex-row items-center justify-between"
                   style={{
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 4 },
@@ -215,7 +215,7 @@ export default function RoutesMapWebScreen() {
                     <Text className="text-[#8F9CAE] text-[8px] font-barlow-condensed-bold font-bold uppercase tracking-wider">VELOCIDAD</Text>
                     <View className="flex-row items-baseline mt-0.5">
                       <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 24, color: '#FFFFFF', lineHeight: 28 }}>{simSpeed}</Text>
-                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 8, color: '#00A3E0', marginLeft: 2 }}>KM/H</Text>
+                      <Text style={{ fontFamily: 'Orbitron-Bold', fontSize: 8, color: '#FF5A1F', marginLeft: 2 }}>KM/H</Text>
                     </View>
                   </View>
 
@@ -238,10 +238,10 @@ export default function RoutesMapWebScreen() {
                           className="items-center justify-center"
                         >
                           <View className="w-7 h-0.5 bg-[#8F9CAE]/30 absolute" />
-                          <View className="w-4 h-1 bg-[#00A3E0] rounded-full" />
+                          <View className="w-4 h-1 bg-[#FF5A1F] rounded-full" />
                         </View>
                         <View className="absolute bottom-[-4px] bg-[#0F1216] px-1 py-0.2 rounded border border-[#202630]">
-                          <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 8, color: '#00E5FF' }}>{Math.abs(simLean)}°</Text>
+                          <Text style={{ fontFamily: 'Rajdhani-Bold', fontSize: 8, color: '#FF5A1F' }}>{Math.abs(simLean)}°</Text>
                         </View>
                       </View>
 
@@ -257,8 +257,8 @@ export default function RoutesMapWebScreen() {
                   <View className="items-center px-1">
                     <Text className="text-[#8F9CAE] text-[8px] font-barlow-condensed-bold font-bold uppercase tracking-wider">ESTADO</Text>
                     <View className="items-center mt-1">
-                      <View className="w-1.5 h-1.5 rounded-full bg-[#00E5FF] mb-0.5" />
-                      <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 7, color: '#00E5FF' }}>SIMULADO</Text>
+                      <View className="w-1.5 h-1.5 rounded-full bg-[#FF5A1F] mb-0.5" />
+                      <Text style={{ fontFamily: 'BarlowCondensed-Bold', fontSize: 7, color: '#FF5A1F' }}>SIMULADO</Text>
                     </View>
                   </View>
                 </View>
@@ -313,7 +313,7 @@ export default function RoutesMapWebScreen() {
 
               {/* Simulation Launcher Top Banner */}
               <View 
-                className="absolute top-4 left-4 right-4 bg-[#0F1216]/95 border border-[#00A3E0]/30 rounded-xl p-3 flex-row items-center justify-between z-10"
+                className="absolute top-4 left-4 right-4 bg-[#0F1216]/95 border border-[#FF5A1F]/30 rounded-xl p-3 flex-row items-center justify-between z-10"
                 style={{
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 4 },
@@ -327,7 +327,7 @@ export default function RoutesMapWebScreen() {
                 </View>
                 <TouchableOpacity
                   onPress={startSimulation}
-                  className="bg-[#00A3E0] rounded-lg px-3 py-1.5 border border-[#00A3E0] shadow-sm flex-row items-center space-x-1"
+                  className="bg-[#FF5A1F] rounded-lg px-3 py-1.5 border border-[#FF5A1F] shadow-sm flex-row items-center space-x-1"
                 >
                   <Play size={12} color="#FFFFFF" />
                   <Text className="text-white font-bold text-[10px] uppercase tracking-wider">SIMULAR</Text>

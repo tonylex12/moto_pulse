@@ -28,7 +28,7 @@ module.exports = {
           green: '#2CFF0A',
         },
         speedo: {
-          cyan: '#00E5FF',
+          cyan: '#FF5A1F',
         },
       },
       fontFamily: {

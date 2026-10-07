@@ -202,6 +202,32 @@ type SavedRoute struct {
 	UpdatedAt    time.Time `gorm:"column:updatedAt;not null" json:"updatedAt"`
 }
 
+// BackgroundJob is a durable PostgreSQL-backed work item. A unique DedupKey
+// makes enqueueing idempotent while a job is pending or running.
+type BackgroundJob struct {
+	ID          string     `gorm:"primaryKey;column:id;not null" json:"id"`
+	Type        string     `gorm:"column:type;not null;index:idx_jobs_claim,priority:2" json:"type"`
+	Payload     JSON       `gorm:"column:payload;type:jsonb;not null" json:"payload"`
+	Status      string     `gorm:"column:status;not null;default:pending;index:idx_jobs_claim,priority:1" json:"status"`
+	DedupKey    string     `gorm:"column:dedupKey;not null;uniqueIndex" json:"dedupKey"`
+	Attempts    int        `gorm:"column:attempts;not null;default:0" json:"attempts"`
+	MaxAttempts int        `gorm:"column:maxAttempts;not null;default:5" json:"maxAttempts"`
+	AvailableAt time.Time  `gorm:"column:availableAt;not null;index:idx_jobs_claim,priority:3" json:"availableAt"`
+	LockedAt    *time.Time `gorm:"column:lockedAt" json:"lockedAt"`
+	LastError   *string    `gorm:"column:lastError" json:"lastError"`
+	CreatedAt   time.Time  `gorm:"column:createdAt;default:now();not null" json:"createdAt"`
+	UpdatedAt   time.Time  `gorm:"column:updatedAt;not null" json:"updatedAt"`
+}
+
+func (BackgroundJob) TableName() string { return "BackgroundJob" }
+
+func (j *BackgroundJob) BeforeCreate(tx *gorm.DB) error {
+	if j.ID == "" {
+		j.ID = GenerateUUID()
+	}
+	return nil
+}
+
 func (SavedRoute) TableName() string {
 	return "SavedRoute"
 }

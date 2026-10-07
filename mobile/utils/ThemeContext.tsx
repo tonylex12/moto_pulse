@@ -3,6 +3,7 @@ import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Theme = 'light' | 'dark';
+type ThemePreference = Theme | 'system';
 
 interface ThemeColors {
   bg: string;
@@ -27,6 +28,8 @@ interface ThemeContextType {
   theme: Theme;
   colors: ThemeColors;
   toggleTheme: () => void;
+	preference: ThemePreference;
+	setThemePreference: (preference: ThemePreference) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -36,15 +39,15 @@ const lightColors: ThemeColors = {
   card: 'bg-[#FFFFFF]',
   subCard: 'bg-[#EBF0F5]',
   border: 'border-[#D8E0EB]',
-  text: 'text-[#002C5B]', // BMW Motorsport Deep Blue
+  text: 'text-[#002C5B]',
   textSec: 'text-[#4E5E72]', // Medium slate grey
   textMuted: 'text-[#8E9FBC]', // Light slate blue-grey
-  textAccent: 'text-[#1C69D4]', // BMW Motorsport Royal Blue
-  bgAccent: 'bg-[#1C69D4]',
-  borderAccent: 'border-[#1C69D4]',
-  bmwBlue: '#1C69D4',
+  textAccent: 'text-[#FF5A1F]', // MotoPulse orange
+  bgAccent: 'bg-[#FF5A1F]',
+  borderAccent: 'border-[#FF5A1F]',
+  bmwBlue: '#FF5A1F',
   bmwRed: '#E30613',
-  bmwLightBlue: '#00A3E0',
+  bmwLightBlue: '#FF5A1F',
   statusGreen: '#34C759', // iOS Switch Green
   statusGreenBg: 'bg-[#34C759]',
   isDark: false,
@@ -58,12 +61,12 @@ const darkColors: ThemeColors = {
   text: 'text-white',
   textSec: 'text-[#E2E8F0]', // Bright light grey
   textMuted: 'text-[#A0AEC0]', // Medium-light grey for readable labels
-  textAccent: 'text-[#00A3E0]', // BMW Motorsport Light Blue
-  bgAccent: 'bg-[#00A3E0]',
-  borderAccent: 'border-[#00A3E0]',
-  bmwBlue: '#0066B2',
+  textAccent: 'text-[#FF5A1F]', // MotoPulse orange
+  bgAccent: 'bg-[#FF5A1F]',
+  borderAccent: 'border-[#FF5A1F]',
+  bmwBlue: '#FF5A1F',
   bmwRed: '#FF1E27',
-  bmwLightBlue: '#00A3E0',
+  bmwLightBlue: '#FF5A1F',
   statusGreen: '#34C759', // iOS Switch Green
   statusGreenBg: 'bg-[#34C759]',
   isDark: true,
@@ -72,33 +75,37 @@ const darkColors: ThemeColors = {
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const systemScheme = useColorScheme();
   const [theme, setTheme] = useState<Theme>(systemScheme === 'dark' ? 'dark' : 'light');
+	const [preference, setPreference] = useState<ThemePreference>('system');
 
   useEffect(() => {
     // Load theme from storage preference
     AsyncStorage.getItem('theme_preference').then((savedTheme) => {
-      if (savedTheme === 'light' || savedTheme === 'dark') {
-        setTheme(savedTheme);
-      } else {
-        setTheme(systemScheme === 'dark' ? 'dark' : 'light');
-      }
+	  const saved = savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'system';
+	  setPreference(saved);
+	  setTheme(saved === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : saved);
     });
   }, []);
 
   // Dynamically adapt to system theme changes
   useEffect(() => {
-    setTheme(systemScheme === 'dark' ? 'dark' : 'light');
-  }, [systemScheme]);
+	if (preference === 'system') setTheme(systemScheme === 'dark' ? 'dark' : 'light');
+  }, [systemScheme, preference]);
+
+  const setThemePreference = (next: ThemePreference) => {
+	setPreference(next);
+	setTheme(next === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : next);
+	AsyncStorage.setItem('theme_preference', next);
+  };
 
   const toggleTheme = () => {
     const nextTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(nextTheme);
-    AsyncStorage.setItem('theme_preference', nextTheme);
+	setThemePreference(nextTheme);
   };
 
   const colors = theme === 'light' ? lightColors : darkColors;
 
   return (
-    <ThemeContext.Provider value={{ theme, colors, toggleTheme }}>
+	<ThemeContext.Provider value={{ theme, colors, toggleTheme, preference, setThemePreference }}>
       {children}
     </ThemeContext.Provider>
   );

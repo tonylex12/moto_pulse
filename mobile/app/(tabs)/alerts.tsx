@@ -6,6 +6,7 @@ import { Plus, Bell, Calendar, Activity, Check, Trash2, X, ChevronDown, CheckCir
 import { api } from '../../utils/api';
 import { useAlert } from '../../utils/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
+import { useGarage } from '../../features/garage/GarageContext';
 
 interface Vehicle {
   id: string;
@@ -58,6 +59,7 @@ export default function AlertsScreen() {
   const { theme, colors } = useTheme();
   const activeBmwColor = theme === 'light' ? colors.bmwBlue : colors.bmwLightBlue;
   const insets = useSafeAreaInsets();
+	const { activeVehicle: vehicle, refreshGarage } = useGarage();
 
   const tftStyles = {
     bezelBg: theme === "light" ? "#FFFFFF" : "#0F1216",
@@ -65,18 +67,17 @@ export default function AlertsScreen() {
     screenBg: theme === "light" ? "#EBF0F5" : "#050709",
     screenBorder: theme === "light" ? "#D8E0EB" : "#171B22",
     headerBorder: theme === "light" ? "#D8E0EB" : "rgba(255,255,255,0.08)",
-    headerText: theme === "light" ? "#1C69D4" : "#00A3E0",
+    headerText: theme === "light" ? "#FF5A1F" : "#FF5A1F",
     timeText: theme === "light" ? "#4E5E72" : "#8E9FBC",
     textMain: theme === "light" ? "#002C5B" : "#FFFFFF",
     textSec: theme === "light" ? "#4E5E72" : "#A0AEC0",
     cardBg: theme === "light" ? "#FFFFFF" : "#121620",
     cardBorder: theme === "light" ? "#D8E0EB" : "#242D3D",
     // Accent colors
-    accentBlue: theme === "light" ? "#1C69D4" : "#00E5FF",
+    accentBlue: theme === "light" ? "#FF5A1F" : "#FF5A1F",
     accentRed: colors.bmwRed,
   };
 
-  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [alerts, setAlerts] = useState<AlertData[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -100,16 +101,11 @@ export default function AlertsScreen() {
 
   const loadData = async () => {
     try {
-      const response = await api.get('vehicles');
-      const list = response.data || [];
-      if (list.length > 0) {
-        const activeVehicle = list.find((v: any) => v.isActive) || list[0];
-        setVehicle(activeVehicle);
-
-        const alertsResponse = await api.get(`alerts/vehicle/${activeVehicle.id}`);
+	  const activeVehicle = vehicle ?? (await refreshGarage()).find(v => v.isActive) ?? null;
+	  if (activeVehicle) {
+		const alertsResponse = await api.get(`alerts/vehicle/${activeVehicle.id}`);
         setAlerts(alertsResponse.data);
       } else {
-        setVehicle(null);
         setAlerts([]);
       }
     } catch (e) {
@@ -122,7 +118,7 @@ export default function AlertsScreen() {
 
   useEffect(() => {
     loadData();
-  }, []);
+	}, [vehicle?.id]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -283,12 +279,12 @@ export default function AlertsScreen() {
             style={{
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: '#1C69D4',
+              backgroundColor: '#FF5A1F',
               borderRadius: 20,
               paddingHorizontal: 12,
               paddingVertical: 6,
               borderWidth: 1,
-              borderColor: '#1C69D4',
+              borderColor: '#FF5A1F',
             }}
           >
             <Plus size={14} color="#FFFFFF" />
@@ -370,7 +366,7 @@ export default function AlertsScreen() {
                   accentColor = '#FF9E00';
                   isWarning = true;
                 } else {
-                  accentColor = theme === 'light' ? '#1C69D4' : '#00A3E0';
+                  accentColor = theme === 'light' ? '#FF5A1F' : '#FF5A1F';
                 }
                 
                 triggerDesc = `EXPIRACIÓN: ${new Date(alert.triggerValue).toLocaleDateString('es-ES')}`;
@@ -752,7 +748,7 @@ export default function AlertsScreen() {
                             paddingVertical: 8,
                             borderRadius: 8,
                             alignItems: 'center',
-                            backgroundColor: triggerType === 'MILEAGE' ? '#1C69D4' : 'transparent'
+                            backgroundColor: triggerType === 'MILEAGE' ? '#FF5A1F' : 'transparent'
                           }}
                         >
                           <Text style={{
@@ -779,7 +775,7 @@ export default function AlertsScreen() {
                             paddingVertical: 8,
                             borderRadius: 8,
                             alignItems: 'center',
-                            backgroundColor: triggerType === 'DATE' ? '#1C69D4' : 'transparent'
+                            backgroundColor: triggerType === 'DATE' ? '#FF5A1F' : 'transparent'
                           }}
                         >
                           <Text style={{
@@ -941,14 +937,14 @@ export default function AlertsScreen() {
                   disabled={saving}
                   style={{
                     width: '100%',
-                    backgroundColor: '#1C69D4',
+                    backgroundColor: '#FF5A1F',
                     borderRadius: 12,
                     paddingVertical: 14,
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderWidth: 1,
-                    borderColor: '#1C69D4',
-                    shadowColor: '#1C69D4',
+                    borderColor: '#FF5A1F',
+                    shadowColor: '#FF5A1F',
                     shadowOffset: { width: 0, height: 0 },
                     shadowOpacity: 0.4,
                     shadowRadius: 12,

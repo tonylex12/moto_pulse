@@ -156,6 +156,7 @@ import { tokenCache } from '../utils/tokenCache';
 import { setAuthToken, setTokenResolver, api } from '../utils/api';
 import { AlertProvider } from '../utils/AlertContext';
 import { ThemeProvider } from '../utils/ThemeContext';
+import { GarageProvider } from '../features/garage/GarageContext';
 import '../global.css';
 
 // Retrieve the Clerk publishable key from environment variables
@@ -250,7 +251,7 @@ function InitialLayout() {
   if (!isLoaded || !fontsLoaded || (isSignedIn && !authSynced)) {
     return (
       <View style={{ flex: 1, backgroundColor: '#F4F5F7', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#1C69D4" />
+        <ActivityIndicator size="large" color="#FF5A1F" />
       </View>
     );
   }
@@ -269,9 +270,11 @@ export default function RootLayout() {
       <ClerkProvider publishableKey={EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY} tokenCache={Platform.OS === 'web' ? undefined : tokenCache}>
         <ClerkLoaded>
           <ThemeProvider>
-            <AlertProvider>
-              <InitialLayout />
-            </AlertProvider>
+			<GarageProvider>
+			  <AlertProvider>
+				<InitialLayout />
+			  </AlertProvider>
+			</GarageProvider>
           </ThemeProvider>
         </ClerkLoaded>
       </ClerkProvider>

@@ -14,7 +14,7 @@ var DB *gorm.DB
 // InitDB initializes the PostgreSQL connection using GORM and auto-migrates the schema
 func InitDB(databaseURL string) (*gorm.DB, error) {
 	log.Printf("Connecting to database...")
-	
+
 	db, err := gorm.Open(postgres.Open(databaseURL), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
 	})
@@ -23,7 +23,7 @@ func InitDB(databaseURL string) (*gorm.DB, error) {
 	}
 
 	log.Printf("Database connection established. Running auto-migrations...")
-	
+
 	// GORM AutoMigrate is safe and handles missing tables, columns, and indexes.
 	// It respects the custom table names defined in TableName() on each struct.
 	err = db.AutoMigrate(
@@ -32,9 +32,14 @@ func InitDB(databaseURL string) (*gorm.DB, error) {
 		&FuelLog{},
 		&MaintenanceAlert{},
 		&SavedRoute{},
+		&BackgroundJob{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	if err := runMigrations(db); err != nil {
+		return nil, fmt.Errorf("failed to run versioned migrations: %w", err)
 	}
 
 	DB = db
