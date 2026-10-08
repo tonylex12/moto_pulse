@@ -63,3 +63,14 @@ export const Spacing = {
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
+
+// Floating tab bar geometry. Screens that scroll or anchor bottom actions must
+// reserve the same footprint as the navigator to avoid hiding controls.
+export const FloatingTabBar = {
+  baseHeight: Platform.OS === 'ios' ? 58 : 66,
+  bottomMargin: 8,
+  contentGap: 20,
+} as const;
+
+export const getFloatingTabBarInset = (safeAreaBottom: number) =>
+  FloatingTabBar.baseHeight + safeAreaBottom + FloatingTabBar.bottomMargin + FloatingTabBar.contentGap;

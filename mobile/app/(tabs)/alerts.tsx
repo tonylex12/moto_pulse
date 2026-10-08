@@ -7,6 +7,7 @@ import { api } from '../../utils/api';
 import { useAlert } from '../../utils/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
 import { useGarage } from '../../features/garage/GarageContext';
+import { getFloatingTabBarInset } from '../../constants/theme';
 
 interface Vehicle {
   id: string;
@@ -308,7 +309,7 @@ export default function AlertsScreen() {
       ) : (
         <ScrollView
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+		  contentContainerStyle={{ padding: 20, paddingBottom: getFloatingTabBarInset(insets.bottom) }}
           style={{ flex: 1 }}
         >
           {/* Section Title */}

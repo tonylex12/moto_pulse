@@ -5,6 +5,7 @@ import { Gauge, Fuel, Wrench, Map } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../utils/ThemeContext';
 import { MotoPulseDesign } from '../../constants/design';
+import { FloatingTabBar } from '../../constants/theme';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
@@ -30,11 +31,11 @@ export default function TabLayout() {
           backgroundColor: bgColor,
 		  position: 'absolute',
 		  marginHorizontal: 12,
-		  marginBottom: 8,
+		  marginBottom: FloatingTabBar.bottomMargin,
 		  borderRadius: 22,
 		  borderTopWidth: 1,
           borderTopColor: borderColor,
-		  height: Platform.OS === 'ios' ? 58 + insets.bottom : 66 + insets.bottom,
+		  height: FloatingTabBar.baseHeight + insets.bottom,
           paddingTop: 10,
           paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
           elevation: 8,

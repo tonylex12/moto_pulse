@@ -22,6 +22,7 @@ import { api } from '../../utils/api';
 import { useLocation, Coordinate } from '../../hooks/useLocation';
 import { useAlert } from '../../utils/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
+import { getFloatingTabBarInset } from '../../constants/theme';
 
 interface SavedRoute {
   id: string;
@@ -2018,7 +2019,7 @@ export default function RoutesMapScreen() {
           <View 
             style={{
               position: 'absolute',
-              bottom: 96,
+			  bottom: getFloatingTabBarInset(insets.bottom) + 76,
               alignSelf: 'center',
               zIndex: 10
             }}
@@ -2042,7 +2043,10 @@ export default function RoutesMapScreen() {
         )}
 
         {/* Floating actions HUD */}
-        <View className="absolute bottom-6 right-6 left-6 flex-row justify-between items-center z-10">
+		<View
+		  className="absolute right-6 left-6 flex-row justify-between items-center z-10"
+		  style={{ bottom: getFloatingTabBarInset(insets.bottom) }}
+		>
           {/* Favorites List button */}
           <TouchableOpacity
             onPress={() => setRoutesModalVisible(true)}
