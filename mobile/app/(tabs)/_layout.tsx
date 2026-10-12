@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../utils/ThemeContext';
 import { MotoPulseDesign } from '../../constants/design';
 import { FloatingTabBar } from '../../constants/theme';
+import { OfflineBanner } from '../../components/offline/OfflineBanner';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
@@ -16,7 +17,9 @@ export default function TabLayout() {
 	const bgColor = theme === 'light' ? '#FFFDF8' : MotoPulseDesign.color.asphalt;
   const borderColor = theme === 'light' ? '#D8E0EB' : '#1A202C';
 
-  return (
+	return (
+	  <>
+		<OfflineBanner />
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -74,6 +77,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => <Map size={size} color={color} />,
         }}
       />
-    </Tabs>
+	</Tabs>
+	  </>
   );
 }

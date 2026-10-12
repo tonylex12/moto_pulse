@@ -88,10 +88,12 @@ func main() {
 	// Clerk Auth authenticated route group
 	r.Group(func(sub chi.Router) {
 		sub.Use(clerkAuth)
+		sub.Use(middleware.Idempotency)
 
 		// User endpoints
 		sub.Post("/api/users/sync", handlers.SyncUser)
 		sub.Post("/api/users/push-token", handlers.UpdatePushToken)
+		sub.Get("/api/sync/pull", handlers.PullChanges)
 
 		// Vehicle endpoints
 		sub.Get("/api/vehicles", handlers.GetVehicles)

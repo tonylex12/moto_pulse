@@ -6,6 +6,10 @@ project in active development, tested by its author, with no external users.
 It is a learning and portfolio project focused on React Native, Expo and Go.
 The interface is primarily in Spanish.
 
+Native builds are offline-first: previously synchronized garage data remains
+available without connectivity, mutations are queued durably and GPS recordings
+are persisted incrementally in SQLite. See [Offline-first behavior](docs/offline-first.md).
+
 ## Implemented features
 
 | Area | Implemented functionality |

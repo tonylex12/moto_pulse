@@ -15,7 +15,6 @@ export interface Coordinate {
 
 const LOCATION_TASK_NAME = 'background-location-task';
 const IS_RECORDING_STORAGE_KEY = '@motopulse_is_recording';
-const ACTIVE_ROUTE_STORAGE_KEY = '@motopulse_active_recorded_route';
 
 // Global variables to synchronize tracking state between the background task and hook instances
 let recordedRouteGlobal: Coordinate[] = [];

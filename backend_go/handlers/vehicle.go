@@ -14,6 +14,7 @@ import (
 )
 
 type CreateVehicleInput struct {
+	ID             string `json:"id"`
 	Brand          string `json:"brand"`
 	Model          string `json:"model"`
 	Year           int    `json:"year"`
@@ -194,6 +195,7 @@ func CreateVehicle(w http.ResponseWriter, r *http.Request) {
 
 	// External enrichment never extends request latency.
 	vehicle := db.Vehicle{
+		ID:             input.ID,
 		Brand:          input.Brand,
 		Model:          cleanedModel,
 		Year:           input.Year,

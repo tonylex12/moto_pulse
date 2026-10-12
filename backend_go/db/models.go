@@ -219,6 +219,27 @@ type BackgroundJob struct {
 	UpdatedAt   time.Time  `gorm:"column:updatedAt;not null" json:"updatedAt"`
 }
 
+// IdempotencyRecord stores mutation responses so mobile outbox retries are safe.
+type IdempotencyRecord struct {
+	ID           string    `gorm:"primaryKey;column:id;not null"`
+	UserID       string    `gorm:"column:userId;not null;uniqueIndex:idx_idempotency_user_key"`
+	Key          string    `gorm:"column:key;not null;uniqueIndex:idx_idempotency_user_key"`
+	Method       string    `gorm:"column:method;not null"`
+	Path         string    `gorm:"column:path;not null"`
+	StatusCode   int       `gorm:"column:statusCode;not null;default:0"`
+	ResponseBody []byte    `gorm:"column:responseBody;type:bytea"`
+	CreatedAt    time.Time `gorm:"column:createdAt;default:now();not null"`
+	UpdatedAt    time.Time `gorm:"column:updatedAt;not null"`
+}
+
+func (IdempotencyRecord) TableName() string { return "IdempotencyRecord" }
+func (r *IdempotencyRecord) BeforeCreate(tx *gorm.DB) error {
+	if r.ID == "" {
+		r.ID = GenerateUUID()
+	}
+	return nil
+}
+
 func (BackgroundJob) TableName() string { return "BackgroundJob" }
 
 func (j *BackgroundJob) BeforeCreate(tx *gorm.DB) error {

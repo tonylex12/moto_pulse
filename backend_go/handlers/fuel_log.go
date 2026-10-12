@@ -11,6 +11,7 @@ import (
 )
 
 type CreateFuelLogInput struct {
+	ID        string     `json:"id"`
 	VehicleID string     `json:"vehicleId"`
 	Odometer  int        `json:"odometer"`
 	Liters    float64    `json:"liters"`
@@ -83,6 +84,7 @@ func CreateFuelLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logEntry := db.FuelLog{
+		ID:        input.ID,
 		VehicleID: input.VehicleID,
 		Odometer:  input.Odometer,
 		Liters:    input.Liters,

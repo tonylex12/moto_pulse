@@ -23,6 +23,7 @@ import { useLocation, Coordinate } from '../../hooks/useLocation';
 import { useAlert } from '../../utils/AlertContext';
 import { useTheme } from '../../utils/ThemeContext';
 import { getFloatingTabBarInset } from '../../constants/theme';
+import { useOffline } from '../../features/offline/OfflineContext';
 
 interface SavedRoute {
   id: string;
@@ -83,6 +84,7 @@ export default function RoutesMapScreen() {
   const { showAlert } = useAlert();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+	const { isOnline } = useOffline();
 
   const mapRef = useRef<MapView | null>(null);
   const webViewRef = useRef<WebView | null>(null);
@@ -379,6 +381,7 @@ export default function RoutesMapScreen() {
   };
 
   const searchPlaces = async (query: string) => {
+	if (!isOnline) { setSearchResults([]); return; }
     if (!query || query.trim().length < 3) {
       setSearchResults([]);
       return;
@@ -404,6 +407,7 @@ export default function RoutesMapScreen() {
   };
 
   const startNavigation = async (place: any) => {
+	if (!isOnline) { showAlert('Modo offline', 'La búsqueda y el cálculo de navegación requieren conexión. Puedes seguir grabando tu rodada sin Internet.'); return; }
     if (!currentLocation) {
       showAlert('Ubicación requerida', 'Se necesita tu ubicación actual GPS para calcular la ruta.');
       return;
@@ -1648,12 +1652,13 @@ export default function RoutesMapScreen() {
             >
               <Search size={18} color={colors.isDark ? '#A0AEC0' : '#8E9FBC'} style={{ marginRight: 8 }} />
               <TextInput
+				editable={isOnline}
                 value={searchQuery}
                 onChangeText={(text) => {
                   setSearchQuery(text);
                   searchPlaces(text);
                 }}
-                placeholder="Buscar destino..."
+				placeholder={isOnline ? 'Buscar destino...' : 'Navegación no disponible offline'}
                 placeholderTextColor={colors.isDark ? '#A0AEC0' : '#8E9FBC'}
                 className={`flex-1 text-sm ${colors.text} p-0`}
                 style={{ height: 24, fontSize: 13 }}

@@ -37,6 +37,7 @@ import { TachometerGauge } from "../../components/ui/TachometerGauge";
 import { useAlert } from "../../utils/AlertContext";
 import { useTheme } from "../../utils/ThemeContext";
 import { useGarage } from "../../features/garage/GarageContext";
+import { useOffline } from "../../features/offline/OfflineContext";
 
 interface Vehicle {
   id: string;
@@ -116,6 +117,7 @@ export default function DashboardScreen() {
   const { theme, colors, toggleTheme } = useTheme();
   const insets = useSafeAreaInsets();
 	const { refreshGarage, activateVehicle } = useGarage();
+	const { pendingCount } = useOffline();
 
   // State
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
@@ -617,7 +619,9 @@ export default function DashboardScreen() {
   const handleLogout = () => {
     showAlert(
       "Cerrar Sesión",
-      "¿Estás seguro de que quieres apagar el motor y salir?",
+	  pendingCount > 0
+		? `Tienes ${pendingCount} cambio${pendingCount === 1 ? '' : 's'} sin sincronizar. Si sales, se eliminarán del dispositivo.`
+		: "¿Estás seguro de que quieres apagar el motor y salir?",
       [
         { text: "Cancelar", style: "cancel" },
         { text: "Salir", style: "destructive", onPress: () => signOut() },

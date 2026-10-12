@@ -15,6 +15,7 @@ import (
 )
 
 type CreateAlertInput struct {
+	ID                 string         `json:"id"`
 	VehicleID          string         `json:"vehicleId"`
 	Type               db.AlertType   `json:"type"`
 	Title              string         `json:"title"`
@@ -107,6 +108,7 @@ func CreateAlert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	alert := db.MaintenanceAlert{
+		ID:                 input.ID,
 		VehicleID:          input.VehicleID,
 		Type:               input.Type,
 		Title:              input.Title,

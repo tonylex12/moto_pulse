@@ -157,6 +157,8 @@ import { setAuthToken, setTokenResolver, api } from '../utils/api';
 import { AlertProvider } from '../utils/AlertContext';
 import { ThemeProvider } from '../utils/ThemeContext';
 import { GarageProvider } from '../features/garage/GarageContext';
+import { OfflineProvider } from '../features/offline/OfflineContext';
+import { clearOfflineSessionData } from '../features/offline/database';
 import '../global.css';
 
 // Retrieve the Clerk publishable key from environment variables
@@ -226,6 +228,7 @@ function InitialLayout() {
       } else {
         setAuthToken(null);
         setAuthSynced(false);
+		void clearOfflineSessionData();
       }
     };
 
@@ -270,11 +273,13 @@ export default function RootLayout() {
       <ClerkProvider publishableKey={EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY} tokenCache={Platform.OS === 'web' ? undefined : tokenCache}>
         <ClerkLoaded>
           <ThemeProvider>
-			<GarageProvider>
-			  <AlertProvider>
-				<InitialLayout />
-			  </AlertProvider>
-			</GarageProvider>
+			<OfflineProvider>
+			  <GarageProvider>
+				<AlertProvider>
+				  <InitialLayout />
+				</AlertProvider>
+			  </GarageProvider>
+			</OfflineProvider>
           </ThemeProvider>
         </ClerkLoaded>
       </ClerkProvider>

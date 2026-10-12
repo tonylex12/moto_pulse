@@ -11,6 +11,7 @@ import (
 )
 
 type CreateRouteInput struct {
+	ID           string            `json:"id"`
 	Name         string            `json:"name"`
 	Coordinates  []RouteCoordinate `json:"coordinates"`
 	StartPoint   *string           `json:"startPoint"`
@@ -83,6 +84,7 @@ func CreateRoute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	route := db.SavedRoute{
+		ID:           input.ID,
 		Name:         input.Name,
 		Coordinates:  db.JSON(coordBytes),
 		StartPoint:   input.StartPoint,

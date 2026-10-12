@@ -33,6 +33,7 @@ func InitDB(databaseURL string) (*gorm.DB, error) {
 		&MaintenanceAlert{},
 		&SavedRoute{},
 		&BackgroundJob{},
+		&IdempotencyRecord{},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
